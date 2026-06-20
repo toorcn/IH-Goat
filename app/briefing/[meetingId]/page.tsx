@@ -44,7 +44,7 @@ export default async function BriefingPage({
             </p>
           </div>
         </div>
-        <SecondaryButton href={`/meeting/${meeting.id}`} icon={<Radio className="h-4 w-4" />}>
+        <SecondaryButton href={`/live/${meeting.id}`} icon={<Radio className="h-4 w-4" />}>
           Open live companion
         </SecondaryButton>
       </section>
@@ -60,7 +60,6 @@ export default async function BriefingPage({
             icon: <Sparkles className="h-4 w-4" />,
             content: (
               <div className="space-y-4">
-                <p className="whitespace-pre-wrap text-sm leading-7 text-ink">{context.briefing}</p>
                 {context.suggestedQuestions.length > 0 ? (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -74,7 +73,11 @@ export default async function BriefingPage({
                       ))}
                     </ul>
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-sm leading-6 text-muted">
+                    Start the briefing to hear the prep and ask follow-ups.
+                  </p>
+                )}
               </div>
             )
           },

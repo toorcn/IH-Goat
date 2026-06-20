@@ -61,7 +61,7 @@ export default async function DashboardPage() {
                   Start briefing
                 </PrimaryButton>
                 <SecondaryButton
-                  href={`/meeting/${context.upcomingMeeting.id}`}
+                  href={`/live/${context.upcomingMeeting.id}`}
                   icon={<Radio className="h-4 w-4" />}
                 >
                   Open companion
@@ -156,7 +156,7 @@ export default async function DashboardPage() {
             eyebrow="During the call"
             title="Live Companion"
             description="Capture transcript signals and show silent prompts without interrupting the conversation."
-            href={`/meeting/${context.upcomingMeeting.id}`}
+            href={`/live/${context.upcomingMeeting.id}`}
             cta="Start companion"
             icon={<Radio className="h-5 w-5" />}
             tone="rose"

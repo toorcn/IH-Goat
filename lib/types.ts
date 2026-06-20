@@ -164,3 +164,24 @@ export type SilentSuggestion = {
   source: string;
   priority: "high" | "medium" | "low";
 };
+
+export type TranscriptTurn = {
+  id: string;
+  speaker: "advisor" | "client" | "unknown";
+  text: string;
+  at: string;
+};
+
+export type RelevantMemory = {
+  memoryId: string;
+  reason: string;
+};
+
+export type LiveAnalysisResponse = {
+  source: "openai" | "demo";
+  attributions: Array<{ id: string; speaker: "advisor" | "client" }>;
+  suggestions: SilentSuggestion[];
+  extracted: ExtractedMemory[];
+  relevant: RelevantMemory[];
+  warning?: string;
+};

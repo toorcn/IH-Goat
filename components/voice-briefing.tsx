@@ -39,9 +39,7 @@ type TokenResponse = {
 const realtimeCallsUrl = "https://api.openai.com/v1/realtime/calls";
 
 export function VoiceBriefing({ context }: { context: ClientContext }) {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: "briefing-seed", role: "assistant", text: context.briefing }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const [statusText, setStatusText] = useState("Tap to start. I'll talk you through it — just ask follow-ups out loud.");
@@ -63,6 +61,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
     () => [...messages].reverse().find((message) => message.role === "assistant"),
     [messages]
   );
+  const assistantCaption = latestAssistant ? latestCaptionSlice(latestAssistant.text) : "";
   const advisorQuestion = lastMessage?.role === "advisor" ? lastMessage.text : null;
   const phaseLabel =
     status === "error"
@@ -442,29 +441,38 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
             <p className="mt-2 max-w-md text-sm leading-6 text-muted">{statusText}</p>
           </div>
 
-          {/* Live captions — proof that it heard you and is answering. */}
-          <div className="mx-auto mt-7 max-w-2xl space-y-3">
+          {/* Live captions — proof that it heard you and is answering, without exposing the full script. */}
+          <div className="mx-auto mt-7 flex max-w-2xl flex-col items-center gap-3">
             {advisorQuestion ? (
-              <div className="caption-enter ml-auto w-fit max-w-[85%] rounded-[1.1rem] rounded-br-md bg-cobalt/10 px-4 py-2.5 text-right text-sm leading-6 text-ink">
-                <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">
-                  {context.advisor.name}
-                </span>
+              <div className="caption-page ml-auto flex max-w-[85%] items-center gap-2 rounded-full border border-cobalt/20 bg-cobalt/10 py-2 pl-3 pr-4 text-sm font-semibold leading-6 text-ink shadow-soft backdrop-blur-xl">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-cobalt" aria-hidden />
+                <span className="sr-only">{context.advisor.name}: </span>
                 {advisorQuestion}
               </div>
             ) : null}
 
-            <div
-              key={latestAssistant?.id}
-              className="caption-enter rounded-[1.4rem] border border-line bg-paper p-4 sm:p-5"
-            >
-              <span className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">
-                {speaking ? "Speaking now" : "Briefing"}
-              </span>
-              <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-ink">
-                {latestAssistant?.text || (connected ? "…" : context.briefing)}
-                {speaking ? <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-ink align-middle" /> : null}
-              </p>
-            </div>
+            {assistantCaption || connected || status === "connecting" ? (
+              <div
+                key={`${latestAssistant?.id ?? "idle"}-${assistantCaption}`}
+                className="caption-page flex max-w-full items-center gap-2 rounded-full border border-white/70 bg-white/65 py-2 pl-3 pr-4 text-sm font-semibold leading-6 text-ink shadow-soft backdrop-blur-xl sm:text-base"
+              >
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    status === "connecting" ? "bg-amber" : speaking ? "bg-signal animate-pulse" : "bg-muted"
+                  }`}
+                  aria-hidden
+                />
+                <span className="min-w-0 whitespace-normal text-left">
+                  {assistantCaption || (status === "connecting" ? "Connecting..." : "Listening...")}
+                  {speaking ? <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-ink align-middle" /> : null}
+                </span>
+              </div>
+            ) : (
+              <div className="caption-page flex items-center gap-2 rounded-full border border-white/60 bg-white/50 px-3.5 py-2 text-xs font-semibold text-muted shadow-soft backdrop-blur-xl">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-signal" aria-hidden />
+                Tap Start to hear the brief
+              </div>
+            )}
           </div>
 
           {/* Controls */}
@@ -703,6 +711,23 @@ function extractFunctionCall(event: Record<string, unknown>) {
 
 function stringField(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function latestCaptionSlice(text: string) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= 150) return clean;
+
+  const windowText = clean.slice(-170);
+  const sentenceStart = Math.max(
+    windowText.lastIndexOf(". "),
+    windowText.lastIndexOf("? "),
+    windowText.lastIndexOf("! ")
+  );
+  if (sentenceStart >= 0 && sentenceStart < windowText.length - 12) {
+    return windowText.slice(sentenceStart + 2).trim();
+  }
+
+  return `...${windowText.trimStart()}`;
 }
 
 const queryClientMemoryTool = {
