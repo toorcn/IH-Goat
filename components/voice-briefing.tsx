@@ -33,6 +33,7 @@ const realtimeCallsUrl = "https://api.openai.com/v1/realtime/calls";
 const TEXT_REVEAL_DELAY_MS = 240;
 const VISUAL_REVEAL_DELAY_MS = 900;
 const AUTO_SCROLL_BOTTOM_GAP = 96;
+const MIC_ERROR_ESCALATION_DELAY_MS = 2500;
 
 function tryParseJSON(str: string) {
   const cleaned = str.trim();
@@ -589,6 +590,7 @@ export function VoiceBriefing({
   const turnIdsByResponseIdRef = useRef<Map<string, string>>(new Map());
   // Track the ID of the current live turn so stale closures can target it
   const liveTurnIdRef = useRef<string | null>(null);
+  const micErrorTimerRef = useRef<number | null>(null);
 
   const connected = status === "connected" || status === "speaking";
   const speaking = status === "speaking";
@@ -597,7 +599,7 @@ export function VoiceBriefing({
 
   const phaseLabel =
     status === "error"
-      ? "Something went wrong"
+      ? "Mic issue"
       : status === "connecting"
         ? "Connecting"
         : speaking
@@ -629,7 +631,30 @@ export function VoiceBriefing({
     liveResponseIdRef.current = null;
     turnIdsByResponseIdRef.current.clear();
     liveTurnIdRef.current = null;
+    if (micErrorTimerRef.current) {
+      window.clearTimeout(micErrorTimerRef.current);
+      micErrorTimerRef.current = null;
+    }
   }, []);
+
+  const clearMicErrorTimer = useCallback(() => {
+    if (!micErrorTimerRef.current) return;
+    window.clearTimeout(micErrorTimerRef.current);
+    micErrorTimerRef.current = null;
+  }, []);
+
+  const showTransientMicIssue = useCallback(
+    (message: string) => {
+      clearMicErrorTimer();
+      setStatusText("Brief connection hiccup - still trying.");
+      micErrorTimerRef.current = window.setTimeout(() => {
+        micErrorTimerRef.current = null;
+        setStatus("error");
+        setStatusText(message);
+      }, MIC_ERROR_ESCALATION_DELAY_MS);
+    },
+    [clearMicErrorTimer]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -799,6 +824,7 @@ export function VoiceBriefing({
 
     setStatus("connecting");
     setStatusText("Connecting…");
+    clearMicErrorTimer();
 
     try {
       const tokenResponse = await fetch("/api/realtime/token", {
@@ -850,20 +876,21 @@ export function VoiceBriefing({
       };
       channel.onerror = () => {
         if (!isCurrentSession()) return;
-        setStatus("error");
-        setStatusText("Realtime data channel failed.");
+        showTransientMicIssue("The mic connection needs another tap.");
       };
       channel.onclose = () => {
         if (!isCurrentSession()) return;
+        clearMicErrorTimer();
         setStatus((current) => (current === "error" ? current : "idle"));
         setStatusText("Realtime session closed.");
       };
       channel.onopen = () => {
         if (!isCurrentSession()) return;
+        clearMicErrorTimer();
         setStatus("connected");
         setStatusText("I'm listening — ask me anything about this client.");
         requestAssistantResponse(
-          "Speak the prepared pre-meeting briefing now. Then pause and wait for Sarah's voice follow-up questions."
+          "Start with a brief warm greeting to Sarah, then speak the prepared pre-meeting briefing. Then pause and wait for Sarah's voice follow-up questions."
         );
       };
 
@@ -950,12 +977,12 @@ export function VoiceBriefing({
 
     if (type === "error") {
       const error = event.error as { message?: string } | undefined;
-      setStatus("error");
-      setStatusText(error?.message ?? "Realtime returned an error.");
+      showTransientMicIssue(error?.message ?? "The mic connection needs another tap.");
       return;
     }
 
     if (type === "response.created") {
+      clearMicErrorTimer();
       setStatus("speaking");
       setOrbMinimised(true);
       // Generate the new turn ID *outside* setTurns to avoid double-invoke issues
@@ -1003,6 +1030,7 @@ export function VoiceBriefing({
     }
 
     if (type === "response.done") {
+      clearMicErrorTimer();
       const responseId = responseIdFromEvent(event);
       const id = turnIdForEvent(event);
       if (id) {
@@ -1200,7 +1228,7 @@ export function VoiceBriefing({
               {status === "connecting"
                 ? "Connecting to your briefing assistant…"
                 : status === "error"
-                  ? "Something went wrong. Try tapping the mic again."
+                  ? "Mic needs another tap if it does not recover."
                   : "The opening brief will appear here as it is spoken."}
             </p>
           </div>
@@ -1338,6 +1366,7 @@ function buildRealtimeInstructions(context: ClientContext) {
     "Never speak to or message the client directly.",
     "The briefing page no longer opens a separate Q&A-only view. Treat suggestedQuestions, open actions, salient memories, and relationship graph context as built-in Q&A preparation for the voice briefing.",
     "For the opening briefing, include the client, meeting objective, one personal opener, unresolved/open items, and the top one or two useful questions Sarah should be ready to ask.",
+    "Begin the spoken opening briefing with a brief, warm greeting to Sarah before the substantive briefing.",
     "Do not tell Sarah to open another view for Q&A context.",
     "",
     "CRITICAL VISUAL DIRECTIVE FOR TEXT OUTPUT:",

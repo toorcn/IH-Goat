@@ -527,6 +527,11 @@ export function LiveCompanion({
   const functionCallNamesRef = useRef<Map<string, string>>(new Map());
   const functionCallArgumentsRef = useRef<Map<string, string>>(new Map());
   const processedFunctionCallsRef = useRef<Set<string>>(new Set());
+  const startInFlightRef = useRef(false);
+  const sessionRunRef = useRef(0);
+  const responseActiveRef = useRef(false);
+  const responseCreateRequestedRef = useRef(false);
+  const pendingResponseCreateRef = useRef(false);
 
   const connected = status === "connected";
 
@@ -635,6 +640,31 @@ export function LiveCompanion({
     }
   }, [savedSignatures, savingSignatures, showToast]);
 
+  const resetResponseState = useCallback(() => {
+    responseActiveRef.current = false;
+    responseCreateRequestedRef.current = false;
+    pendingResponseCreateRef.current = false;
+  }, []);
+
+  const requestResponseCreate = useCallback(() => {
+    const channel = channelRef.current;
+    if (!channel || channel.readyState !== "open") return;
+
+    if (responseActiveRef.current || responseCreateRequestedRef.current) {
+      pendingResponseCreateRef.current = true;
+      return;
+    }
+
+    responseCreateRequestedRef.current = true;
+    channel.send(JSON.stringify({ type: "response.create" }));
+  }, []);
+
+  const flushPendingResponseCreate = useCallback(() => {
+    if (!pendingResponseCreateRef.current) return;
+    pendingResponseCreateRef.current = false;
+    requestResponseCreate();
+  }, [requestResponseCreate]);
+
   const sendToolOutput = useCallback((callId: string, output: Record<string, unknown>) => {
     const channel = channelRef.current;
     if (!channel || channel.readyState !== "open") return;
@@ -646,8 +676,8 @@ export function LiveCompanion({
         output: JSON.stringify(output)
       }
     }));
-    channel.send(JSON.stringify({ type: "response.create" }));
-  }, []);
+    requestResponseCreate();
+  }, [requestResponseCreate]);
 
   const executeRealtimeTool = useCallback(async (toolCall: RealtimeToolCall) => {
     if (processedFunctionCallsRef.current.has(toolCall.callId)) return;
@@ -842,6 +872,17 @@ export function LiveCompanion({
       }
       const type = typeof event.type === "string" ? event.type : "";
 
+      if (type === "response.created") {
+        responseCreateRequestedRef.current = false;
+        responseActiveRef.current = true;
+        return;
+      }
+      if (type === "response.done" || type === "response.cancelled") {
+        responseCreateRequestedRef.current = false;
+        responseActiveRef.current = false;
+        flushPendingResponseCreate();
+        return;
+      }
       if (type === "input_audio_buffer.speech_started") {
         setSomeoneSpeaking(true);
         return;
@@ -902,14 +943,25 @@ export function LiveCompanion({
       }
       if (type === "error") {
         const error = event.error as { message?: string } | undefined;
+        const message = error?.message ?? "Realtime returned an error.";
+        if (/active response in progress/i.test(message)) {
+          responseActiveRef.current = true;
+          responseCreateRequestedRef.current = false;
+          pendingResponseCreateRef.current = true;
+          setStatus("connected");
+          setStatusText("Still processing the previous response. Capture will continue automatically.");
+          return;
+        }
         setStatus("error");
-        setStatusText(error?.message ?? "Realtime returned an error.");
+        setStatusText(message);
       }
     },
-    [classifyTurnImmediate, executeRealtimeTool, scheduleAnalysis, upsertTurnText]
+    [classifyTurnImmediate, executeRealtimeTool, flushPendingResponseCreate, scheduleAnalysis, upsertTurnText]
   );
 
   const stopCapture = useCallback(() => {
+    sessionRunRef.current += 1;
+    startInFlightRef.current = false;
     if (analyzeTimerRef.current) clearTimeout(analyzeTimerRef.current);
     channelRef.current?.close();
     channelRef.current = null;
@@ -920,15 +972,22 @@ export function LiveCompanion({
     functionCallNamesRef.current.clear();
     functionCallArgumentsRef.current.clear();
     processedFunctionCallsRef.current.clear();
+    resetResponseState();
     lastSuggestionAtRef.current = 0;
     lastPartnerAtRef.current = 0;
     setSomeoneSpeaking(false);
     setStatus((current) => (current === "error" ? current : "idle"));
     setStatusText("Capture stopped. Saved memory stays on the client record.");
-  }, []);
+  }, [resetResponseState]);
 
   const startCapture = useCallback(async () => {
-    if (status === "connecting" || connected) return;
+    if (startInFlightRef.current || status === "connecting" || connected) return;
+    startInFlightRef.current = true;
+    const sessionRun = sessionRunRef.current + 1;
+    sessionRunRef.current = sessionRun;
+    const isCurrentSession = () => sessionRunRef.current === sessionRun;
+
+    resetResponseState();
     setStatus("connecting");
     setStatusText("Connecting…");
 
@@ -947,11 +1006,21 @@ export function LiveCompanion({
       if (!tokenResponse.ok || !ephemeralKey) {
         throw new Error(token.detail ?? token.error ?? token.message ?? "Unable to create Realtime token.");
       }
+      if (!isCurrentSession()) return;
 
       const peer = new RTCPeerConnection();
+      if (!isCurrentSession()) {
+        peer.close();
+        return;
+      }
       peerRef.current = peer;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isCurrentSession()) {
+        stream.getTracks().forEach((track) => track.stop());
+        peer.close();
+        return;
+      }
       localStreamRef.current = stream;
       for (const track of stream.getAudioTracks()) {
         peer.addTrack(track, stream);
@@ -959,21 +1028,28 @@ export function LiveCompanion({
 
       const channel = peer.createDataChannel("oai-events");
       channelRef.current = channel;
-      channel.onmessage = (event) => handleRealtimeEvent(event.data);
+      channel.onmessage = (event) => {
+        if (isCurrentSession()) handleRealtimeEvent(event.data);
+      };
       channel.onerror = () => {
+        if (!isCurrentSession()) return;
         setStatus("error");
         setStatusText("Realtime data channel failed.");
       };
       channel.onclose = () => {
+        if (!isCurrentSession()) return;
         setStatus((current) => (current === "error" ? current : "idle"));
       };
       channel.onopen = () => {
+        if (!isCurrentSession()) return;
         setStatus("connected");
         setStatusText("Listening silently. Suggestions and captured memory appear as you talk.");
       };
 
       const offer = await peer.createOffer();
+      if (!isCurrentSession()) return;
       await peer.setLocalDescription(offer);
+      if (!isCurrentSession()) return;
 
       const sdpResponse = await fetch(realtimeCallsUrl, {
         method: "POST",
@@ -986,13 +1062,17 @@ export function LiveCompanion({
       if (!sdpResponse.ok) {
         throw new Error(await sdpResponse.text());
       }
+      if (!isCurrentSession()) return;
       await peer.setRemoteDescription({ type: "answer", sdp: await sdpResponse.text() });
     } catch (caught) {
+      if (!isCurrentSession()) return;
       stopCapture();
       setStatus("error");
       setStatusText(caught instanceof Error ? caught.message : "Could not start live capture.");
+    } finally {
+      if (isCurrentSession()) startInFlightRef.current = false;
     }
-  }, [connected, context, handleRealtimeEvent, status, stopCapture]);
+  }, [connected, context, handleRealtimeEvent, resetResponseState, status, stopCapture]);
 
   useEffect(() => {
     return () => {

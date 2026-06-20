@@ -14,7 +14,7 @@ export function AppShell({
   fitViewport?: boolean;
 }) {
   const menuItems = [
-    { href: "/", label: "Dashboard" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/qna/meeting-2026-06-20-tan", label: "Q&A" },
     { href: "/client/client-tan", label: "Client" },
     { href: "/post-meeting/meeting-2026-06-20-tan", label: "Review" }
@@ -33,7 +33,7 @@ export function AppShell({
           <div className="flex items-center justify-between gap-2">
             <Link
               href="/"
-              aria-label="Dashboard"
+              aria-label="Briefing"
               className="focus-ring pressable group rounded-[0.95rem] px-2.5 py-1.5 sm:px-3"
             >
               <h1 className="text-xl font-semibold tracking-normal text-ink">
