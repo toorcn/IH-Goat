@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: oklch(97% 0.006 230);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(180deg, oklch(98% 0.006 230), oklch(94% 0.012 230)),
+    oklch(97% 0.006 230);
+  color: oklch(21% 0.016 235);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+button,
+a,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: oklch(83% 0.08 176);
+  color: oklch(21% 0.016 235);
+}
+
+.focus-ring {
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.focus-ring:focus-visible {
+  box-shadow:
+    0 0 0 2px oklch(97% 0.006 230),
+    0 0 0 4px oklch(57% 0.14 176 / 0.55);
+}
