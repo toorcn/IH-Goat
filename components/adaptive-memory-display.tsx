@@ -136,7 +136,7 @@ export function AdaptiveMemoryDisplay({
   );
 }
 
-function CompactRelationshipGraph({
+export function CompactRelationshipGraph({
   graph,
   hero
 }: {
