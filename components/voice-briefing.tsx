@@ -1,17 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import {
-  AlertCircle,
-  CalendarClock,
-  GitFork,
-  ListChecks,
-  Mic,
-  Quote,
-  Send,
-  Sparkles,
-  Square
-} from "lucide-react";
+import { Mic, Send, Square } from "lucide-react";
+import { AdaptiveMemoryDisplay } from "@/components/adaptive-memory-display";
 import type { ClientContext, MemoryQueryVisualResponse } from "@/lib/types";
 import { Badge, EmptyState } from "./ui";
 
@@ -395,6 +386,12 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
         <Badge tone={status === "error" ? "rose" : connected ? "signal" : "neutral"}>{phaseLabel}</Badge>
       </div>
 
+      {visualResponse ? (
+        <div className="mt-5 scroll-mt-4">
+          <AdaptiveMemoryDisplay response={visualResponse} variant="hero" title="Latest answer" />
+        </div>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div>
           {/* Voice stage — the orb visibly reacts so the advisor can see it listening and responding. */}
@@ -538,146 +535,6 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   );
 }
 
-function AdaptiveMemoryDisplay({ response }: { response: MemoryQueryVisualResponse | null }) {
-  if (!response) {
-    return (
-      <div className="rounded-lg border border-line bg-panel p-3">
-        <p className="text-sm font-semibold text-ink">Adaptive memory panel</p>
-        <EmptyState>Ask a typed or voice question to render client memory here.</EmptyState>
-      </div>
-    );
-  }
-
-  const icon = displayModeIcon(response.displayMode);
-
-  return (
-    <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Adaptive view</p>
-          <h3 className="mt-1 flex items-center gap-2 text-sm font-semibold text-ink">
-            {icon}
-            {displayModeLabel(response.displayMode)}
-          </h3>
-        </div>
-        <Badge tone={response.source === "neo4j" ? "signal" : "neutral"}>{response.source}</Badge>
-      </div>
-
-      <p className="text-sm leading-6 text-ink">{response.answer}</p>
-
-      {response.missingInfo ? (
-        <div className="rounded-lg border border-amber/40 bg-amber/15 p-3">
-          <p className="text-sm font-semibold text-ink">{response.missingInfo.title}</p>
-          <p className="mt-1 text-sm leading-5 text-muted">{response.missingInfo.reason}</p>
-          <p className="mt-2 text-sm leading-5 text-ink">{response.missingInfo.suggestedNextStep}</p>
-        </div>
-      ) : null}
-
-      {response.cards?.length ? (
-        <div className="space-y-2">
-          {response.cards.slice(0, 4).map((card) => (
-            <div key={card.id} className="rounded-lg border border-line bg-paper p-3">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">{card.eyebrow}</p>
-              <p className="mt-1 text-sm font-semibold text-ink">{card.title}</p>
-              <p className="mt-1 text-sm leading-5 text-muted">{card.body}</p>
-              {card.meta ? <p className="mt-2 text-xs text-muted">{card.meta}</p> : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {response.rows?.length ? (
-        <div className="overflow-hidden rounded-lg border border-line">
-          {response.rows.slice(0, 5).map((row) => (
-            <div key={`${row.label}-${row.value}`} className="border-b border-line bg-paper p-3 last:border-b-0">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                <p className="text-sm font-semibold text-ink">{row.label}</p>
-                <p className="text-xs font-semibold text-muted">{row.value}</p>
-              </div>
-              {row.detail ? <p className="mt-1 text-sm leading-5 text-muted">{row.detail}</p> : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {response.graph ? (
-        <div className="rounded-lg border border-line bg-paper p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Relationship graph</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {response.graph.nodes.map((node) => (
-              <span key={node.id} className="rounded-full border border-line bg-panel px-3 py-1 text-xs font-semibold text-ink">
-                {node.label}
-              </span>
-            ))}
-          </div>
-          <div className="mt-3 space-y-1">
-            {response.graph.edges.slice(0, 5).map((edge) => (
-              <p key={edge.id} className="text-xs leading-5 text-muted">
-                {edge.source} &gt; {edge.label} &gt; {edge.target}
-              </p>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {response.actions?.length ? (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Next steps</p>
-          {response.actions.slice(0, 3).map((action) => (
-            <div key={action.id} className="rounded-lg border border-line bg-paper p-3">
-              <p className="text-sm font-semibold text-ink">{action.title}</p>
-              <p className="mt-1 text-sm leading-5 text-muted">{action.reason}</p>
-              {action.dueAt || action.status ? (
-                <p className="mt-2 text-xs font-semibold text-muted">
-                  {[action.status, action.dueAt].filter(Boolean).join(" · ")}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {response.citations.length ? (
-        <div className="space-y-2">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-            <Quote className="h-3.5 w-3.5" />
-            Evidence
-          </p>
-          {response.citations.slice(0, 3).map((citation) => (
-            <blockquote key={citation.id} className="rounded-lg border border-line bg-paper p-3 text-sm leading-5 text-muted">
-              <span className="font-semibold text-ink">{citation.label}: </span>
-              {citation.snippet}
-            </blockquote>
-          ))}
-        </div>
-      ) : null}
-
-      {response.warning ? <p className="text-xs leading-5 text-amber">{response.warning}</p> : null}
-    </div>
-  );
-}
-
-function displayModeLabel(mode: MemoryQueryVisualResponse["displayMode"]) {
-  const labels: Record<MemoryQueryVisualResponse["displayMode"], string> = {
-    brief: "Brief answer",
-    cards: "Memory cards",
-    table: "Action table",
-    graph: "Relationship graph",
-    timeline: "Timeline",
-    recommendation: "Recommendation",
-    missing_info: "Missing info"
-  };
-  return labels[mode];
-}
-
-function displayModeIcon(mode: MemoryQueryVisualResponse["displayMode"]) {
-  if (mode === "recommendation") return <Sparkles className="h-4 w-4 text-signal" />;
-  if (mode === "graph") return <GitFork className="h-4 w-4 text-cobalt" />;
-  if (mode === "table") return <ListChecks className="h-4 w-4 text-signal" />;
-  if (mode === "timeline") return <CalendarClock className="h-4 w-4 text-amber" />;
-  if (mode === "missing_info") return <AlertCircle className="h-4 w-4 text-amber" />;
-  return <Quote className="h-4 w-4 text-muted" />;
-}
 
 function extractFunctionCall(event: Record<string, unknown>) {
   const type = typeof event.type === "string" ? event.type : "";

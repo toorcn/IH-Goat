@@ -22,6 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <nav className="-mx-2 flex gap-2 overflow-x-auto px-2 pb-1 text-sm font-medium text-muted md:mx-0 md:flex-wrap md:justify-end md:overflow-visible md:px-0 md:pb-0">
               <NavLink href="/">Dashboard</NavLink>
               <NavLink href="/briefing/meeting-2026-06-20-tan">Briefing</NavLink>
+              <NavLink href="/qna/meeting-2026-06-20-tan">Q&A</NavLink>
               <NavLink href="/meeting/meeting-2026-06-20-tan">Meeting</NavLink>
               <NavLink href="/client/client-tan">Client</NavLink>
               <NavLink href="/post-meeting/meeting-2026-06-20-tan">Review</NavLink>
