@@ -14,6 +14,8 @@ type Intent =
   | "action"
   | "timeline"
   | "summary"
+  | "chart"
+  | "bullets"
   | "unknown";
 
 const intentKeywords: Record<Exclude<Intent, "unknown">, string[]> = {
@@ -21,7 +23,9 @@ const intentKeywords: Record<Exclude<Intent, "unknown">, string[]> = {
   relationship: ["relationship", "family", "network", "who", "spouse", "daughter"],
   action: ["promise", "follow-up", "follow up", "action", "send", "remind", "reminder", "todo"],
   timeline: ["last time", "history", "timeline", "discuss", "discussed", "previous", "when"],
-  summary: ["brief", "summary", "summarize", "know", "context", "overview"]
+  summary: ["brief", "summary", "summarize", "know", "context", "overview"],
+  chart: ["progress", "renewal", "completion", "percent", "percentage", "chart", "rate"],
+  bullets: ["bullets", "bullet points", "list", "bullet", "points"]
 };
 
 export function buildMemoryQueryVisualResponse(
@@ -145,6 +149,43 @@ export function buildMemoryQueryVisualResponse(
     };
   }
 
+  if (displayMode === "chart") {
+    let value = 50;
+    let label = "General Progress";
+    if (cleanQuery.toLowerCase().includes("will")) {
+      value = 20;
+      label = "Will Planning Completion";
+    } else if (cleanQuery.toLowerCase().includes("policy") || cleanQuery.toLowerCase().includes("renew")) {
+      value = 85;
+      label = "Policy Renewal Likelihood";
+    } else if (cleanQuery.toLowerCase().includes("nus") || cleanQuery.toLowerCase().includes("jia")) {
+      value = 95;
+      label = "NUS Admission Readiness";
+    }
+
+    return {
+      ...base,
+      answer: `Here is the current status metric: ${label} is at ${value}%.`,
+      chart: {
+        label,
+        value,
+        type: "progress"
+      }
+    };
+  }
+
+  if (displayMode === "bullets") {
+    const listItems = matches.length > 0
+      ? matches.map((m) => `${m.title}: ${m.summary}`)
+      : context.memories.slice(0, 4).map((m) => `${m.title}: ${m.summary}`);
+
+    return {
+      ...base,
+      answer: `Key points found in memory:`,
+      bullets: listItems
+    };
+  }
+
   const cardMemories = matches.length > 0 ? matches : context.memories.slice(0, 4);
   return {
     ...base,
@@ -175,6 +216,8 @@ function selectDisplayMode(
   if (intent === "relationship") return "graph";
   if (intent === "action" || actions.length > 0) return "table";
   if (intent === "timeline") return "timeline";
+  if (intent === "chart") return "chart";
+  if (intent === "bullets") return "bullets";
   if (matches.length <= 1) return "brief";
   return "cards";
 }

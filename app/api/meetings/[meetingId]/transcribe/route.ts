@@ -3,7 +3,7 @@ import { getClientContextForMeeting } from "@/lib/neo4j-memory";
 
 export const runtime = "nodejs";
 
-const openAiTranscriptionUrl = "https://api.openai.com/v1/audio/transcriptions";
+const openAiTranslationUrl = "https://api.openai.com/v1/audio/translations";
 
 export async function POST(
   request: Request,
@@ -45,7 +45,7 @@ export async function POST(
   upstream.append("model", process.env.OPENAI_TRANSCRIBE_MODEL ?? "whisper-1");
   upstream.append("response_format", "json");
 
-  const response = await fetch(openAiTranscriptionUrl, {
+  const response = await fetch(openAiTranslationUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`

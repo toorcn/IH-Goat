@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
 import { Mic, Plus, Square, WandSparkles } from "lucide-react";
 import { useLiveMeetingRecorder } from "@/hooks/use-live-meeting-recorder";
 import { extractMeetingSignals } from "@/lib/demo-data";
-import type { ClientContext, ExtractedMemory, SilentSuggestion, TranscriptEvent } from "@/lib/types";
+import type { ClientContext, ExtractedMemory, SilentSuggestion, TranscriptEvent, MemoryQueryVisualResponse } from "@/lib/types";
 import { Badge, EmptyState, Panel } from "./ui";
 import { SuggestionFeed } from "./suggestion-feed";
+import { AdaptiveMemoryDisplay } from "./voice-briefing";
 
 const demoStatements = [
   "Jia En is excited about NUS, but it made me think more seriously about family planning.",
@@ -18,10 +19,11 @@ const demoStatements = [
 export function MeetingCompanion({ context }: { context: ClientContext }) {
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
   const [draft, setDraft] = useState("");
+  const [suggestions, setSuggestions] = useState<SilentSuggestion[]>([]);
+  const [extracted, setExtracted] = useState<ExtractedMemory[]>([]);
+  const [visualResponse, setVisualResponse] = useState<MemoryQueryVisualResponse | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const signals = useMemo(() => extractMeetingSignals(events), [events]);
-  const suggestions: SilentSuggestion[] = signals.suggestions;
-  const extracted: ExtractedMemory[] = signals.extracted;
   const recorder = useLiveMeetingRecorder({
     meetingId: context.upcomingMeeting.id,
     clientId: context.client.id,
@@ -31,6 +33,51 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
       }
     }
   });
+
+  useEffect(() => {
+    if (events.length === 0) {
+      const resetTimer = setTimeout(() => {
+        setSuggestions([]);
+        setExtracted([]);
+        setVisualResponse(null);
+      }, 0);
+      return () => clearTimeout(resetTimer);
+    }
+
+
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetch(`/api/meetings/${context.upcomingMeeting.id}/extract`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ events })
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to extract signals");
+          return res.json();
+        })
+        .then((data: { suggestions?: SilentSuggestion[]; extracted?: ExtractedMemory[]; visualResponse?: MemoryQueryVisualResponse | null }) => {
+          setSuggestions(data.suggestions ?? []);
+          setExtracted(data.extracted ?? []);
+          setVisualResponse(data.visualResponse ?? null);
+        })
+        .catch((err) => {
+          console.error(err);
+          // Fallback to client-side extract if API fails or offline
+          const fallback = extractMeetingSignals(events);
+          setSuggestions(fallback.suggestions);
+          setExtracted(fallback.extracted);
+          setVisualResponse(null);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [events, context.upcomingMeeting.id]);
 
   function addEvent(text: string, speaker: TranscriptEvent["speaker"] = "client") {
     const clean = text.trim();
@@ -46,6 +93,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
     ]);
     setDraft("");
   }
+
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
@@ -167,7 +215,12 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
 
       <div className="space-y-5">
         <SuggestionFeed suggestions={suggestions} />
-        <Panel title="Captured Memory" eyebrow="Candidate updates">
+        {visualResponse && <AdaptiveMemoryDisplay response={visualResponse} />}
+        <Panel
+          title="Captured Memory"
+          eyebrow="Candidate updates"
+          action={loading ? <Badge tone="amber">analyzing...</Badge> : null}
+        >
           {extracted.length === 0 ? (
             <EmptyState>Candidate memories appear after relevant transcript events.</EmptyState>
           ) : (

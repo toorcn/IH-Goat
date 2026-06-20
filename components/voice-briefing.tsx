@@ -5,12 +5,14 @@ import {
   AlertCircle,
   CalendarClock,
   GitFork,
+  List,
   ListChecks,
   Mic,
   Quote,
   Send,
   Sparkles,
-  Square
+  Square,
+  TrendingUp
 } from "lucide-react";
 import type { ClientContext, MemoryQueryVisualResponse } from "@/lib/types";
 import { Badge, EmptyState } from "./ui";
@@ -538,7 +540,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   );
 }
 
-function AdaptiveMemoryDisplay({ response }: { response: MemoryQueryVisualResponse | null }) {
+export function AdaptiveMemoryDisplay({ response }: { response: MemoryQueryVisualResponse | null }) {
   if (!response) {
     return (
       <div className="rounded-lg border border-line bg-panel p-3">
@@ -652,6 +654,29 @@ function AdaptiveMemoryDisplay({ response }: { response: MemoryQueryVisualRespon
         </div>
       ) : null}
 
+      {response.bullets?.length ? (
+        <ul className="space-y-1.5 list-disc pl-5 text-sm leading-6 text-muted">
+          {response.bullets.map((bullet, index) => (
+            <li key={index}>{bullet}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      {response.chart ? (
+        <div className="rounded-lg border border-line bg-paper p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{response.chart.label}</p>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="h-4 flex-1 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-signal transition-[width] duration-500"
+                style={{ width: `${response.chart.value}%` }}
+              />
+            </div>
+            <span className="text-sm font-bold text-ink">{response.chart.value}%</span>
+          </div>
+        </div>
+      ) : null}
+
       {response.warning ? <p className="text-xs leading-5 text-amber">{response.warning}</p> : null}
     </div>
   );
@@ -665,7 +690,9 @@ function displayModeLabel(mode: MemoryQueryVisualResponse["displayMode"]) {
     graph: "Relationship graph",
     timeline: "Timeline",
     recommendation: "Recommendation",
-    missing_info: "Missing info"
+    missing_info: "Missing info",
+    chart: "Status chart",
+    bullets: "Key points"
   };
   return labels[mode];
 }
@@ -676,6 +703,8 @@ function displayModeIcon(mode: MemoryQueryVisualResponse["displayMode"]) {
   if (mode === "table") return <ListChecks className="h-4 w-4 text-signal" />;
   if (mode === "timeline") return <CalendarClock className="h-4 w-4 text-amber" />;
   if (mode === "missing_info") return <AlertCircle className="h-4 w-4 text-amber" />;
+  if (mode === "chart") return <TrendingUp className="h-4 w-4 text-signal" />;
+  if (mode === "bullets") return <List className="h-4 w-4 text-muted" />;
   return <Quote className="h-4 w-4 text-muted" />;
 }
 

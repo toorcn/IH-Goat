@@ -86,7 +86,9 @@ export type MemoryDisplayMode =
   | "graph"
   | "timeline"
   | "recommendation"
-  | "missing_info";
+  | "missing_info"
+  | "chart"
+  | "bullets";
 
 export type EvidenceSnippet = {
   id: string;
@@ -119,6 +121,8 @@ export type MemoryQueryVisualResponse = {
   actions?: SuggestedAction[];
   missingInfo?: { title: string; reason: string; suggestedNextStep: string };
   warning?: string;
+  bullets?: string[];
+  chart?: { label: string; value: number; type: "progress" | "bar" };
 };
 
 export type ClientContext = {
