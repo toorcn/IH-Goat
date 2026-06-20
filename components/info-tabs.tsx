@@ -73,7 +73,7 @@ export function InfoTabs({
             </div>
           ) : null}
 
-          <div className="flex items-center gap-1 rounded-[1.4rem] border border-line/80 bg-panel/85 p-1.5 shadow-diffusion backdrop-blur-xl">
+          <div className="grid grid-flow-col auto-cols-fr items-stretch gap-1 rounded-[1.4rem] border border-line/80 bg-panel/85 p-1.5 shadow-diffusion backdrop-blur-xl">
             {tabs.map((tab) => {
               const isActive = tab.id === activeId;
               const showBadge = typeof tab.badge === "number" && tab.badge > 0;
@@ -83,7 +83,7 @@ export function InfoTabs({
                   type="button"
                   onClick={() => setActiveId(isActive ? null : tab.id)}
                   aria-pressed={isActive}
-                  className={`focus-ring pressable relative flex flex-1 flex-col items-center justify-center gap-1 rounded-[1rem] px-1.5 py-2.5 text-[0.66rem] font-semibold leading-none transition-colors sm:flex-row sm:gap-2 sm:py-2 sm:text-sm ${
+                  className={`focus-ring pressable relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1rem] px-1 py-2 text-[0.66rem] font-semibold leading-none transition-colors sm:min-h-11 sm:flex-row sm:gap-2 sm:px-2 sm:py-2 sm:text-sm ${
                     isActive
                       ? "bg-ink text-paper"
                       : tab.attention && !isActive
@@ -97,10 +97,10 @@ export function InfoTabs({
                       <span className="absolute -right-1 -top-1 h-2 w-2 animate-pulse rounded-full bg-rose" />
                     ) : null}
                   </span>
-                  <span>{tab.label}</span>
+                  <span className="max-w-full truncate leading-tight">{tab.label}</span>
                   {showBadge ? (
                     <span
-                      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.6rem] font-bold ${
+                      className={`absolute right-1.5 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.6rem] font-bold sm:static ${
                         isActive ? "bg-paper text-ink" : "bg-signal text-ink"
                       }`}
                     >

@@ -6,7 +6,12 @@ import type {
   ClientContext,
   ExtractedMemory,
   LiveAnalysisResponse,
+  LiveMemorySearchResponse,
+  LiveMemorySearchResult,
+  LivePartnerRecommendation,
+  LivePartnerRecommendationResponse,
   MemoryCategory,
+  SaveMemoryResult,
   SilentSuggestion,
   TranscriptTurn
 } from "@/lib/types";
@@ -26,6 +31,10 @@ type TokenResponse = {
 const realtimeCallsUrl = "https://api.openai.com/v1/realtime/calls";
 const ANALYZE_DEBOUNCE_MS = 1500;
 const CAPTION_TTL_MS = 7000;
+const MIN_TURNS_BEFORE_SUGGESTIONS = 3;
+const MIN_WORDS_BEFORE_SUGGESTIONS = 18;
+const SUGGESTION_COOLDOWN_MS = 20000;
+const PARTNER_COOLDOWN_MS = 30000;
 const MEMORY_CATEGORIES: MemoryCategory[] = [
   "Life Event",
   "Emotional Cue",
@@ -55,6 +64,22 @@ type RealtimeToolCall = {
   callId: string;
   name: string;
   args: Record<string, unknown>;
+};
+
+type LiveSearchEntry = LiveMemorySearchResponse & {
+  id: string;
+  at: string;
+};
+
+type LivePartnerEntry = LivePartnerRecommendationResponse & {
+  id: string;
+  at: string;
+};
+
+type SaveToast = {
+  id: string;
+  text: string;
+  tone: "signal" | "amber" | "rose";
 };
 
 function signatureOf(memory: ExtractedMemory) {
@@ -138,32 +163,115 @@ function clampConfidence(value: unknown) {
   return typeof value === "number" ? Math.max(0, Math.min(1, value)) : 0.75;
 }
 
-function buildLiveRealtimeInstructions(context: ClientContext) {
-  const knownMemory = context.memories.slice(0, 12).map((memory) => ({
-    id: memory.id,
-    category: memory.category,
-    title: memory.title,
-    summary: memory.summary,
-    status: memory.status
-  }));
-  const people = context.graph.nodes
-    .filter((node) => node.type !== "Advisor" && node.type !== "Client")
-    .map((node) => ({ label: node.label, type: node.type, note: node.note }));
+function normalizedSuggestionText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
+function wordCount(value: string) {
+  return normalizedSuggestionText(value).split(" ").filter(Boolean).length;
+}
+
+function isOpeningSmallTalk(value: string) {
+  const normalized = normalizedSuggestionText(value);
+  if (!normalized) return true;
+  const hasGreeting = /\b(hello|hi|hey|good morning|good afternoon|good evening)\b/.test(normalized);
+  const hasIdentityCheck = /\b(is this|am i speaking|speaking to|mr|mrs|ms|miss)\b/.test(normalized);
+  return normalized.length < 80 && (hasGreeting || hasIdentityCheck);
+}
+
+function suggestionSimilarity(left: string, right: string) {
+  const leftWords = new Set(normalizedSuggestionText(left).split(" ").filter((word) => word.length > 2));
+  const rightWords = new Set(normalizedSuggestionText(right).split(" ").filter((word) => word.length > 2));
+  if (leftWords.size === 0 || rightWords.size === 0) return 0;
+  let overlap = 0;
+  for (const word of leftWords) {
+    if (rightWords.has(word)) overlap += 1;
+  }
+  return overlap / Math.min(leftWords.size, rightWords.size);
+}
+
+function shouldAcceptSuggestion(
+  suggestion: SilentSuggestion,
+  turns: TranscriptTurn[],
+  currentSuggestions: SilentSuggestion[],
+  lastAcceptedAt: number
+) {
+  const spokenText = turns.map((turn) => turn.text).join(" ");
+  const substantiveTurns = turns.filter((turn) => wordCount(turn.text) >= 4);
+  if (substantiveTurns.length < MIN_TURNS_BEFORE_SUGGESTIONS || wordCount(spokenText) < MIN_WORDS_BEFORE_SUGGESTIONS) {
+    return { accepted: false, reason: "Wait for more substantive conversation before suggesting questions." };
+  }
+  if (turns.slice(-2).some((turn) => isOpeningSmallTalk(turn.text))) {
+    return { accepted: false, reason: "Opening greeting or identity check is not enough for an advisor prompt." };
+  }
+  const title = normalizedSuggestionText(suggestion.title);
+  const reason = normalizedSuggestionText(suggestion.reason);
+  if (/(identify|identity|confirm|caller|recipient|reached|speaking to)/.test(`${title} ${reason}`)) {
+    return { accepted: false, reason: "Identity-confirmation prompts are suppressed during live companion warmup." };
+  }
+  if (Date.now() - lastAcceptedAt < SUGGESTION_COOLDOWN_MS) {
+    return { accepted: false, reason: "Suggestion cooldown is active." };
+  }
+  if (currentSuggestions.some((item) => suggestionSimilarity(item.title, suggestion.title) >= 0.65)) {
+    return { accepted: false, reason: "Similar suggestion already shown." };
+  }
+  return { accepted: true, reason: "" };
+}
+
+function hasPartnerNeedSignal(value: string) {
+  return /\b(lawyer|legal|will|estate|probate|trust|doctor|physician|medical|health|screening|underwriting|insurance|tax|accountant|specialist|referral|introduction|introduce|succession)\b/i.test(
+    value
+  );
+}
+
+function shouldAcceptPartnerLookup(
+  need: string,
+  sourceSnippet: string,
+  turns: TranscriptTurn[],
+  currentEntries: LivePartnerEntry[],
+  lastAcceptedAt: number
+) {
+  const recentText = turns.slice(-5).map((turn) => turn.text).join(" ");
+  const signalText = `${need} ${sourceSnippet} ${recentText}`;
+  if (turns.slice(-2).some((turn) => isOpeningSmallTalk(turn.text)) && !hasPartnerNeedSignal(signalText)) {
+    return { accepted: false, reason: "Opening greeting or identity check is not enough for a partner recommendation." };
+  }
+  if (!hasPartnerNeedSignal(signalText)) {
+    return { accepted: false, reason: "No concrete specialist, referral, legal, medical, tax, or estate need detected." };
+  }
+  if (Date.now() - lastAcceptedAt < PARTNER_COOLDOWN_MS) {
+    return { accepted: false, reason: "Partner recommendation cooldown is active." };
+  }
+  if (currentEntries.some((entry) => suggestionSimilarity(entry.need, need) >= 0.65)) {
+    return { accepted: false, reason: "Similar partner need already surfaced." };
+  }
+  return { accepted: true, reason: "" };
+}
+
+function buildLiveRealtimeInstructions(context: ClientContext) {
   return [
     "You are an advisor-only live meeting conductor for a financial advisor.",
     "Listen to the meeting audio, transcribe it, and use tools to help the advisor. Never speak to the client. Do not produce prose unless it is a tool call.",
     `Advisor: ${context.advisor.name}. Client: ${context.client.name}. Meeting objective: ${context.upcomingMeeting.objective}.`,
-    "Use fetch_client_context when a new topic needs more client context before suggesting a question.",
-    "Use suggest_follow_up_question only for high-value questions the advisor can ask now.",
+    "Use search_client_memory only when the current conversation needs a specific known fact, action, relationship, or referral from Neo4j. Keep the query focused; do not ask for the full client record.",
+    "Use surface_relevant_partner only when the conversation contains a concrete specialist or referral need, such as legal, estate, tax, medical, health, succession, or business-owner support. This tool returns focused partner cards from Neo4j or the advisor partner directory.",
+    "Do not surface partners for vague rapport, generic planning, greetings, identity checks, or unless the advisor would benefit from knowing a specific possible intro right now.",
+    "Use suggest_follow_up_question only after at least three substantive turns and a concrete planning, financial, family, referral, concern, goal, or commitment signal.",
+    "Do not call suggest_follow_up_question for greetings, identity checks, call routing, or generic confirmations such as 'hello' or 'is this Mr Tan'.",
+    "At most one suggestion every 20 seconds. Prefer no suggestion over a generic one.",
     "Use capture_useful_memory for durable facts worth saving: life events, emotional cues, unresolved concerns, goals, promises, relationship mentions, referrals, and follow-ups.",
     "Only capture facts actually said in the conversation. Use the sourceSnippet field for the supporting quote.",
-    "Known context snapshot:",
+    "Captured memory is auto-saved; do not ask for permission before calling the capture tool when the fact is useful and new.",
+    "Small routing context:",
     JSON.stringify({
-      client: context.client,
-      knownMemory,
-      knownPeople: people,
-      suggestedQuestions: context.suggestedQuestions
+      clientId: context.client.id,
+      advisorName: context.advisor.name,
+      clientName: context.client.name,
+      meetingId: context.upcomingMeeting.id
     })
   ].join("\n");
 }
@@ -197,6 +305,110 @@ function computeCaptionPageStart(text: string, from: number, availableWidth: num
   return start;
 }
 
+// Speaker attribution — multi-signal heuristics + sequence refinement.
+// No LLM calls; runs synchronously on every final transcript turn.
+
+const ADVISOR_CUES: RegExp[] = [
+  /\b(i recommend|you should|have you (considered|thought about|looked at)|you might want|i suggest|i'd (like to|suggest)|let me|let's)\b/i,
+  /\b(based on your|given your|in your (case|situation)|for your (situation|goals))\b/i,
+  /\b(as your advisor|our recommendation|the plan (is|would)|we (can|could|should) look)\b/i,
+  /\b(that('s| is) (a )?(good|great|important)|i (understand|see|agree)|right[,.] |yes[,.] (so|and|but))\b/i,
+];
+
+const CLIENT_CUES: RegExp[] = [
+  /\b(my (wife|husband|partner|child|son|daughter|children|kids|family|home|house|property|savings|money|portfolio|retirement|will|estate|business))\b/i,
+  /\b(i (want|need|worry|feel|hope|plan|have been|intend|wish)|i'm (worried|concerned|not sure|thinking|planning|considering))\b/i,
+  /\b(we (have|want|are|were|need|hope|plan|would like|'ve been|are planning))\b/i,
+  /\b(our (home|house|savings|retirement|family|children|goals|future))\b/i,
+  /\b(i (still|haven't|don't|didn't|can't|couldn't|wouldn't))\b/i,
+];
+
+function scoreTurnSpeaker(text: string, clientName?: string): { advisor: number; client: number } {
+  let advisor = 0;
+  let client = 0;
+
+  for (const p of ADVISOR_CUES) if (p.test(text)) advisor += 1;
+  for (const p of CLIENT_CUES) if (p.test(text)) client += 2;
+
+  if (text.trim().endsWith("?")) advisor += 0.8;
+
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  if (words <= 6 && /\b(yes|no|right|okay|ok|sure|i see|got it|understood|absolutely|certainly)\b/i.test(text)) {
+    advisor += 0.6;
+  }
+
+  if (clientName) {
+    const firstName = clientName.split(/\s+/)[0];
+    if (firstName.length > 2 && new RegExp(`\\b${firstName}\\b`, "i").test(text)) advisor += 1;
+    else if (/\b(mr|mrs|ms|miss|sir)\b/i.test(text)) advisor += 0.5;
+  }
+
+  return { advisor, client };
+}
+
+function initialClassify(
+  text: string,
+  prevKnownSpeaker: TranscriptTurn["speaker"],
+  clientName?: string
+): TranscriptTurn["speaker"] {
+  const { advisor, client } = scoreTurnSpeaker(text, clientName);
+  const margin = Math.abs(advisor - client);
+
+  if (margin >= 1.5) return advisor > client ? "advisor" : "client";
+
+  if (prevKnownSpeaker !== "unknown") {
+    return prevKnownSpeaker === "advisor" ? "client" : "advisor";
+  }
+
+  if (advisor > client) return "advisor";
+  if (client > advisor) return "client";
+  return "unknown";
+}
+
+function refineAttributions(
+  turns: TranscriptTurn[],
+  clientName?: string
+): Map<string, TranscriptTurn["speaker"]> {
+  const updates = new Map<string, TranscriptTurn["speaker"]>();
+  if (turns.length === 0) return updates;
+
+  const speakers: TranscriptTurn["speaker"][] = turns.map((t) => t.speaker);
+  const scores = turns.map((t) => scoreTurnSpeaker(t.text, clientName));
+
+  // Pass 1: anchor high-confidence turns, fill unknowns via alternation from nearest anchor.
+  let lastKnown: TranscriptTurn["speaker"] = "unknown";
+  for (let i = 0; i < turns.length; i++) {
+    const { advisor, client } = scores[i];
+    if (Math.abs(advisor - client) >= 1.5) {
+      speakers[i] = advisor > client ? "advisor" : "client";
+    } else if (speakers[i] === "unknown" && lastKnown !== "unknown") {
+      speakers[i] = lastKnown === "advisor" ? "client" : "advisor";
+    }
+    if (speakers[i] !== "unknown") lastKnown = speakers[i];
+  }
+
+  // Pass 2: smooth isolated marginal flips (A, B, A → A, A, A when B has low confidence).
+  for (let i = 1; i < speakers.length - 1; i++) {
+    if (
+      speakers[i - 1] !== "unknown" &&
+      speakers[i + 1] !== "unknown" &&
+      speakers[i - 1] === speakers[i + 1] &&
+      speakers[i] !== speakers[i - 1] &&
+      Math.abs(scores[i].advisor - scores[i].client) < 1.5
+    ) {
+      speakers[i] = speakers[i - 1];
+    }
+  }
+
+  for (let i = 0; i < turns.length; i++) {
+    if (speakers[i] !== "unknown" && speakers[i] !== turns[i].speaker) {
+      updates.set(turns[i].id, speakers[i]);
+    }
+  }
+
+  return updates;
+}
+
 export function LiveCompanion({
   context,
   extraTabs = []
@@ -204,14 +416,15 @@ export function LiveCompanion({
   context: ClientContext;
   extraTabs?: InfoTab[];
 }) {
-  const meetingId = context.upcomingMeeting.id;
-
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const [statusText, setStatusText] = useState("Start capture to begin a silent, advisor-only companion.");
   const [turns, setTurns] = useState<TranscriptTurn[]>([]);
   const [someoneSpeaking, setSomeoneSpeaking] = useState(false);
   const [analysis, setAnalysis] = useState<LiveAnalysisResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [liveSearches, setLiveSearches] = useState<LiveSearchEntry[]>([]);
+  const [livePartnerEntries, setLivePartnerEntries] = useState<LivePartnerEntry[]>([]);
+  const [saveToast, setSaveToast] = useState<SaveToast | null>(null);
   const [savedSignatures, setSavedSignatures] = useState<Set<string>>(() => new Set());
   const [savingSignatures, setSavingSignatures] = useState<Set<string>>(() => new Set());
   const [attentionSignal, setAttentionSignal] = useState<{ tabId: string; nonce: number }>({ tabId: "", nonce: 0 });
@@ -221,8 +434,11 @@ export function LiveCompanion({
   const localStreamRef = useRef<MediaStream | null>(null);
   const turnsRef = useRef<TranscriptTurn[]>([]);
   const analyzeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attentionNonceRef = useRef(0);
-  const prevCountsRef = useRef({ suggestions: 0, captured: 0 });
+  const prevCountsRef = useRef({ suggestions: 0, captured: 0, partners: 0 });
+  const lastSuggestionAtRef = useRef(0);
+  const lastPartnerAtRef = useRef(0);
   const functionCallNamesRef = useRef<Map<string, string>>(new Map());
   const functionCallArgumentsRef = useRef<Map<string, string>>(new Map());
   const processedFunctionCallsRef = useRef<Set<string>>(new Set());
@@ -248,39 +464,59 @@ export function LiveCompanion({
     });
   }, []);
 
-  const runAnalysis = useCallback(async () => {
-    const payload = turnsRef.current.filter((turn) => turn.text.trim());
+  const showToast = useCallback((text: string, tone: SaveToast["tone"] = "signal") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setSaveToast({ id: `toast-${Date.now()}`, text, tone });
+    toastTimerRef.current = setTimeout(() => setSaveToast(null), 2600);
+  }, []);
+
+  const runAnalysis = useCallback(() => {
+    const payload = turnsRef.current;
     if (payload.length === 0) return;
     setAnalyzing(true);
     try {
-      const response = await fetch(`/api/meetings/${meetingId}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: context.client.id, turns: payload })
-      });
-      if (!response.ok) return;
-      const result = (await response.json()) as LiveAnalysisResponse;
-      setAnalysis(result);
-      // Apply speaker attribution back onto the transcript.
-      if (result.attributions.length > 0) {
-        const map = new Map(result.attributions.map((item) => [item.id, item.speaker]));
+      const updates = refineAttributions(payload, context.client.name);
+      if (updates.size > 0) {
         setTurns((current) =>
-          current.map((turn) => (map.has(turn.id) ? { ...turn, speaker: map.get(turn.id)! } : turn))
+          current.map((turn) => {
+            const refined = updates.get(turn.id);
+            return refined ? { ...turn, speaker: refined } : turn;
+          })
         );
       }
     } finally {
       setAnalyzing(false);
     }
-  }, [context.client.id, meetingId]);
+  }, [context.client.name]);
 
   const scheduleAnalysis = useCallback(() => {
     if (analyzeTimerRef.current) clearTimeout(analyzeTimerRef.current);
     analyzeTimerRef.current = setTimeout(() => void runAnalysis(), ANALYZE_DEBOUNCE_MS);
   }, [runAnalysis]);
 
-  const saveMemory = useCallback(async (memory: ExtractedMemory) => {
+  const classifyTurnImmediate = useCallback((itemId: string) => {
+    setTurns((current) => {
+      const index = current.findIndex((t) => t.id === itemId);
+      if (index === -1 || current[index].speaker !== "unknown") return current;
+      let prevKnown: TranscriptTurn["speaker"] = "unknown";
+      for (let i = index - 1; i >= 0; i--) {
+        if (current[i].speaker !== "unknown") { prevKnown = current[i].speaker; break; }
+      }
+      const speaker = initialClassify(current[index].text, prevKnown, context.client.name);
+      if (speaker === "unknown") return current;
+      return current.map((t, i) => i === index ? { ...t, speaker } : t);
+    });
+  }, [context.client.name]);
+
+  const saveMemory = useCallback(async (memory: ExtractedMemory): Promise<SaveMemoryResult> => {
     const signature = signatureOf(memory);
-    if (savedSignatures.has(signature) || savingSignatures.has(signature)) return;
+    if (savedSignatures.has(signature)) {
+      showToast("Already saved in this session.", "amber");
+      return { writeMode: "neo4j", saved: false, duplicate: true };
+    }
+    if (savingSignatures.has(signature)) {
+      return { writeMode: "neo4j", saved: false, duplicate: true };
+    }
     setSavingSignatures((current) => new Set(current).add(signature));
     try {
       const response = await fetch("/api/memory/approve", {
@@ -288,9 +524,23 @@ export function LiveCompanion({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memory })
       });
-      if (response.ok) {
+      const result = (await response.json()) as SaveMemoryResult;
+      if (response.ok && (result.saved || result.duplicate)) {
         setSavedSignatures((current) => new Set(current).add(signature));
       }
+      if (result.duplicate) {
+        showToast("Already in memory. Skipped duplicate.", "amber");
+      } else if (result.saved && result.writeMode === "neo4j") {
+        showToast("Saved to Neo4j memory.", "signal");
+      } else if (result.saved) {
+        showToast("Saved.", "signal");
+      } else {
+        showToast(result.reason ?? "Memory was captured, but Neo4j did not save it.", "rose");
+      }
+      return result;
+    } catch {
+      showToast("Memory was captured, but the save request failed.", "rose");
+      return { writeMode: "demo", saved: false, reason: "Save request failed." };
     } finally {
       setSavingSignatures((current) => {
         const next = new Set(current);
@@ -298,7 +548,7 @@ export function LiveCompanion({
         return next;
       });
     }
-  }, [savedSignatures, savingSignatures]);
+  }, [savedSignatures, savingSignatures, showToast]);
 
   const sendToolOutput = useCallback((callId: string, output: Record<string, unknown>) => {
     const channel = channelRef.current;
@@ -314,26 +564,104 @@ export function LiveCompanion({
     channel.send(JSON.stringify({ type: "response.create" }));
   }, []);
 
-  const executeRealtimeTool = useCallback((toolCall: RealtimeToolCall) => {
+  const executeRealtimeTool = useCallback(async (toolCall: RealtimeToolCall) => {
     if (processedFunctionCallsRef.current.has(toolCall.callId)) return;
     processedFunctionCallsRef.current.add(toolCall.callId);
 
-    if (toolCall.name === "fetch_client_context") {
-      sendToolOutput(toolCall.callId, {
-        client: context.client,
-        advisor: context.advisor,
-        memories: context.memories.slice(0, 16).map((memory) => ({
-          id: memory.id,
-          category: memory.category,
-          title: memory.title,
-          summary: memory.summary,
-          status: memory.status,
-          salience: memory.salience
-        })),
-        actions: context.actions.slice(0, 8),
-        graph: context.graph,
-        focus: typeof toolCall.args.focus === "string" ? toolCall.args.focus : ""
-      });
+    if (toolCall.name === "search_client_memory") {
+      const query = typeof toolCall.args.query === "string" ? toolCall.args.query.trim() : "";
+      if (!query) {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: "Missing focused search query." });
+        return;
+      }
+      try {
+        const response = await fetch("/api/memory/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: context.client.id,
+            query,
+            reason: typeof toolCall.args.reason === "string" ? toolCall.args.reason : "",
+            limit: typeof toolCall.args.limit === "number" ? toolCall.args.limit : 5
+          })
+        });
+        const result = (await response.json()) as LiveMemorySearchResponse;
+        if (!response.ok) {
+          sendToolOutput(toolCall.callId, { accepted: false, reason: "Memory search failed.", detail: result });
+          return;
+        }
+        setLiveSearches((current) => [
+          { ...result, id: `search-${toolCall.callId}`, at: new Date().toISOString() },
+          ...current
+        ].slice(0, 5));
+        attentionNonceRef.current += 1;
+        setAttentionSignal({ tabId: "relevant", nonce: attentionNonceRef.current });
+        sendToolOutput(toolCall.callId, {
+          accepted: true,
+          source: result.source,
+          query: result.query,
+          results: result.results,
+          warning: result.warning
+        });
+      } catch {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: "Memory search request failed." });
+      }
+      return;
+    }
+
+    if (toolCall.name === "surface_relevant_partner") {
+      const need = typeof toolCall.args.need === "string" ? toolCall.args.need.trim() : "";
+      const sourceSnippet = typeof toolCall.args.sourceSnippet === "string" ? toolCall.args.sourceSnippet.trim() : "";
+      if (!need) {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: "Missing focused partner need." });
+        return;
+      }
+      const acceptance = shouldAcceptPartnerLookup(
+        need,
+        sourceSnippet,
+        turnsRef.current,
+        livePartnerEntries,
+        lastPartnerAtRef.current
+      );
+      if (!acceptance.accepted) {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: acceptance.reason });
+        return;
+      }
+      try {
+        const response = await fetch("/api/partners/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: context.client.id,
+            need,
+            reason: typeof toolCall.args.reason === "string" ? toolCall.args.reason : "",
+            limit: typeof toolCall.args.limit === "number" ? toolCall.args.limit : 3
+          })
+        });
+        const result = (await response.json()) as LivePartnerRecommendationResponse;
+        if (!response.ok) {
+          sendToolOutput(toolCall.callId, { accepted: false, reason: "Partner recommendation failed.", detail: result });
+          return;
+        }
+        lastPartnerAtRef.current = Date.now();
+        if (result.results.length > 0) {
+          setLivePartnerEntries((current) => [
+            { ...result, id: `partner-${toolCall.callId}`, at: new Date().toISOString() },
+            ...current.filter((entry) => suggestionSimilarity(entry.need, need) < 0.65)
+          ].slice(0, 4));
+          attentionNonceRef.current += 1;
+          setAttentionSignal({ tabId: "partners", nonce: attentionNonceRef.current });
+        }
+        sendToolOutput(toolCall.callId, {
+          accepted: true,
+          source: result.source,
+          need: result.need,
+          results: result.results,
+          warning: result.warning
+        });
+      } catch {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: "Partner recommendation request failed." });
+      }
       return;
     }
 
@@ -348,10 +676,25 @@ export function LiveCompanion({
             ? toolCall.args.priority
             : "medium"
       };
+      const currentSuggestions = analysis?.suggestions ?? [];
+      const acceptance = shouldAcceptSuggestion(
+        suggestion,
+        turnsRef.current,
+        currentSuggestions,
+        lastSuggestionAtRef.current
+      );
+      if (!acceptance.accepted) {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: acceptance.reason });
+        return;
+      }
+      lastSuggestionAtRef.current = Date.now();
       setAnalysis((current) => ({
         source: "openai",
         attributions: current?.attributions ?? [],
-        suggestions: [suggestion, ...(current?.suggestions ?? []).filter((item) => item.title !== suggestion.title)].slice(0, 3),
+        suggestions: [
+          suggestion,
+          ...(current?.suggestions ?? []).filter((item) => suggestionSimilarity(item.title, suggestion.title) < 0.65)
+        ].slice(0, 2),
         extracted: current?.extracted ?? [],
         relevant: current?.relevant ?? []
       }));
@@ -386,10 +729,18 @@ export function LiveCompanion({
       }));
       attentionNonceRef.current += 1;
       setAttentionSignal({ tabId: "captured", nonce: attentionNonceRef.current });
-      if (toolCall.args.save !== false) void saveMemory(memory);
-      sendToolOutput(toolCall.callId, { accepted: true, saved: toolCall.args.save !== false, memoryId: memory.id });
+      const saveResult = await saveMemory(memory);
+      sendToolOutput(toolCall.callId, {
+        accepted: true,
+        saved: saveResult.saved,
+        duplicate: saveResult.duplicate,
+        writeMode: saveResult.writeMode,
+        memoryId: memory.id,
+        existingId: saveResult.existingId,
+        reason: saveResult.reason
+      });
     }
-  }, [context, saveMemory, sendToolOutput]);
+  }, [analysis?.suggestions, context, livePartnerEntries, saveMemory, sendToolOutput]);
 
   const handleRealtimeEvent = useCallback(
     (raw: string) => {
@@ -423,6 +774,7 @@ export function LiveCompanion({
         const transcriptText = realtimeEventText(event);
         if (itemId) {
           if (transcriptText) upsertTurnText(itemId, transcriptText, "final");
+          classifyTurnImmediate(itemId);
           scheduleAnalysis();
         }
         return;
@@ -454,7 +806,7 @@ export function LiveCompanion({
         const name = realtimeFunctionName(event) || functionCallNamesRef.current.get(resolvedCallId) || "";
         const rawArgs = realtimeFunctionArguments(event) || functionCallArgumentsRef.current.get(resolvedCallId) || "";
         if (resolvedCallId && name) {
-          executeRealtimeTool({ callId: resolvedCallId, name, args: parseToolArguments(rawArgs) });
+          void executeRealtimeTool({ callId: resolvedCallId, name, args: parseToolArguments(rawArgs) });
         }
         return;
       }
@@ -464,7 +816,7 @@ export function LiveCompanion({
         setStatusText(error?.message ?? "Realtime returned an error.");
       }
     },
-    [executeRealtimeTool, scheduleAnalysis, upsertTurnText]
+    [classifyTurnImmediate, executeRealtimeTool, scheduleAnalysis, upsertTurnText]
   );
 
   const stopCapture = useCallback(() => {
@@ -478,6 +830,8 @@ export function LiveCompanion({
     functionCallNamesRef.current.clear();
     functionCallArgumentsRef.current.clear();
     processedFunctionCallsRef.current.clear();
+    lastSuggestionAtRef.current = 0;
+    lastPartnerAtRef.current = 0;
     setSomeoneSpeaking(false);
     setStatus((current) => (current === "error" ? current : "idle"));
     setStatusText("Capture stopped. Saved memory stays on the client record.");
@@ -551,12 +905,17 @@ export function LiveCompanion({
   }, [connected, context, handleRealtimeEvent, status, stopCapture]);
 
   useEffect(() => {
-    return () => stopCapture();
+    return () => {
+      stopCapture();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, [stopCapture]);
 
   const extracted = analysis?.extracted ?? [];
   const suggestions = analysis?.suggestions ?? [];
   const clientMemories = context.memories;
+  const searchResultCount = liveSearches.reduce((count, search) => count + search.results.length, 0);
+  const partnerResultCount = livePartnerEntries.reduce((count, entry) => count + entry.results.length, 0);
   const relevantMemories = useMemo(() => {
     if (!analysis) return [];
     return analysis.relevant
@@ -575,15 +934,17 @@ export function LiveCompanion({
     const prev = prevCountsRef.current;
     const suggestionCount = analysis.suggestions.length;
     const capturedCount = analysis.extracted.length;
+    const partnerCount = partnerResultCount;
     let tabId = "";
     if (suggestionCount > prev.suggestions) tabId = "ask";
     else if (capturedCount > prev.captured) tabId = "captured";
-    prevCountsRef.current = { suggestions: suggestionCount, captured: capturedCount };
+    else if (partnerCount > prev.partners) tabId = "relevant";
+    prevCountsRef.current = { suggestions: suggestionCount, captured: capturedCount, partners: partnerCount };
     if (tabId) {
       attentionNonceRef.current += 1;
       setAttentionSignal({ tabId, nonce: attentionNonceRef.current });
     }
-  }, [analysis]);
+  }, [analysis, partnerResultCount]);
 
   const insightTabs: InfoTab[] = [
     {
@@ -605,31 +966,65 @@ export function LiveCompanion({
     },
     {
       id: "relevant",
-      label: "Memory",
+      label: "Lookup",
       icon: <Sparkles className="h-4 w-4" />,
-      badge: relevantMemories.length,
+      badge: relevantMemories.length + searchResultCount + partnerResultCount,
+      attention: searchResultCount > 0 || partnerResultCount > 0,
       content: (
         <div className="space-y-2">
-          {relevantMemories.length === 0 ? (
-            <EmptyState>Known facts about {context.client.name} surface here when they become relevant.</EmptyState>
+          {liveSearches.length === 0 && relevantMemories.length === 0 && livePartnerEntries.length === 0 ? (
+            <EmptyState>Targeted Neo4j lookups appear here when the conversation needs a specific known fact.</EmptyState>
           ) : (
-            relevantMemories.map(({ memory, reason }) => (
-              <div key={memory.id} className="rounded-[1.1rem] border border-line bg-paper p-3">
-                <Badge tone="cobalt">{memory.category}</Badge>
-                <p className="mt-2 text-sm font-semibold text-ink">{memory.title}</p>
-                <p className="mt-1 text-sm leading-5 text-muted">{memory.summary}</p>
-                <p className="mt-2 text-xs leading-5 text-cobalt">{reason}</p>
-              </div>
-            ))
+            <>
+              {livePartnerEntries.map((entry) => (
+                <div key={entry.id} className="rounded-[1.1rem] border border-line bg-paper p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={entry.source === "neo4j" ? "signal" : "amber"}>{entry.source}</Badge>
+                    <Badge tone="cobalt">Partner</Badge>
+                    <span className="text-xs font-medium text-muted">{entry.need}</span>
+                  </div>
+                  {entry.reason ? <p className="mt-1 text-xs leading-5 text-muted">{entry.reason}</p> : null}
+                  <div className="mt-2 space-y-2">
+                    {entry.results.map((partner) => (
+                      <PartnerRecommendationCard key={`${entry.id}-${partner.id}`} partner={partner} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {liveSearches.map((search) => (
+                <div key={search.id} className="rounded-[1.1rem] border border-line bg-paper p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={search.source === "neo4j" ? "signal" : "amber"}>{search.source}</Badge>
+                    <span className="text-xs font-medium text-muted">{search.query}</span>
+                  </div>
+                  {search.reason ? <p className="mt-1 text-xs leading-5 text-muted">{search.reason}</p> : null}
+                  <div className="mt-2 space-y-2">
+                    {search.results.length > 0 ? (
+                      search.results.map((result) => <SearchResultCard key={`${search.id}-${result.id}`} result={result} />)
+                    ) : (
+                      <p className="text-sm leading-5 text-muted">No matching client memory found.</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {relevantMemories.map(({ memory, reason }) => (
+                <div key={memory.id} className="rounded-[1.1rem] border border-line bg-paper p-3">
+                  <Badge tone="cobalt">{memory.category}</Badge>
+                  <p className="mt-2 text-sm font-semibold text-ink">{memory.title}</p>
+                  <p className="mt-1 text-sm leading-5 text-muted">{memory.summary}</p>
+                  <p className="mt-2 text-xs leading-5 text-cobalt">{reason}</p>
+                </div>
+              ))}
+            </>
           )}
         </div>
       )
     },
     {
       id: "captured",
-      label: "Capture",
+      label: "Saved",
       icon: <Users className="h-4 w-4" />,
-      badge: unsavedCount,
+      badge: extracted.length,
       attention: unsavedCount > 0,
       content: (
         <div className="space-y-2">
@@ -639,11 +1034,11 @@ export function LiveCompanion({
               onClick={() => extracted.forEach((memory) => void saveMemory(memory))}
               className="focus-ring pressable rounded-full border border-signal/40 bg-signal/10 px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-signal/20"
             >
-              Save all
+              Retry unsaved
             </button>
           ) : null}
           {extracted.length === 0 ? (
-            <EmptyState>Life events, people, concerns and promises are captured here for one-tap save.</EmptyState>
+            <EmptyState>Notable facts saved from this meeting appear here with save status.</EmptyState>
           ) : (
             extracted.map((memory) => {
               const signature = signatureOf(memory);
@@ -729,6 +1124,7 @@ export function LiveCompanion({
 
       {/* Live insights ride in the bottom dock so they are one tap away — never a scroll —
           and auto-pop the relevant panel when something new needs attention. */}
+      {saveToast ? <SaveToastNotice toast={saveToast} /> : null}
       <InfoTabs attentionSignal={attentionSignal} tabs={[...insightTabs, ...extraTabs]} />
     </>
   );
@@ -963,6 +1359,57 @@ function SuggestionCard({ suggestion }: { suggestion: SilentSuggestion }) {
       </div>
       <p className="mt-1 text-sm leading-5 text-muted">{suggestion.reason}</p>
       <p className="mt-2 text-xs text-muted">{suggestion.source}</p>
+    </div>
+  );
+}
+
+function SearchResultCard({ result }: { result: LiveMemorySearchResult }) {
+  const tone = result.type === "memory" ? "cobalt" : result.type === "action" ? "amber" : "signal";
+  return (
+    <div className="rounded-[0.9rem] border border-line/80 bg-panel/70 p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={tone}>{result.type}</Badge>
+        {result.category ? <span className="text-xs font-medium text-muted">{result.category}</span> : null}
+        {result.edgeLabel ? <span className="text-xs font-medium text-muted">{result.edgeLabel}</span> : null}
+      </div>
+      <p className="mt-1.5 text-sm font-semibold leading-5 text-ink">{result.title}</p>
+      <p className="mt-1 text-sm leading-5 text-muted">{result.summary || result.snippet || result.source}</p>
+    </div>
+  );
+}
+
+function PartnerRecommendationCard({ partner }: { partner: LivePartnerRecommendation }) {
+  const tone = partner.partnerType === "doctor" ? "rose" : partner.partnerType === "lawyer" ? "cobalt" : "signal";
+  return (
+    <div className="rounded-[0.9rem] border border-line/80 bg-panel/70 p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={tone}>{partner.partnerType.replace("_", " ")}</Badge>
+        <span className="text-xs font-medium text-muted">{Math.round(partner.confidence * 100)}% match</span>
+        {partner.status ? <span className="text-xs font-medium text-muted">{partner.status}</span> : null}
+      </div>
+      <p className="mt-1.5 text-sm font-semibold leading-5 text-ink">{partner.name}</p>
+      <p className="mt-1 text-sm leading-5 text-muted">{partner.specialty}</p>
+      {partner.organization ? <p className="mt-1 text-xs leading-5 text-muted">{partner.organization}</p> : null}
+      <p className="mt-2 text-sm leading-5 text-ink">{partner.matchReason}</p>
+      <p className="mt-1 text-xs leading-5 text-cobalt">{partner.advisorUse}</p>
+      {partner.evidence ? <p className="mt-1 text-xs leading-5 text-muted">{partner.evidence}</p> : null}
+    </div>
+  );
+}
+
+function SaveToastNotice({ toast }: { toast: SaveToast }) {
+  const toneClass =
+    toast.tone === "rose"
+      ? "border-rose/40 bg-rose/12"
+      : toast.tone === "amber"
+        ? "border-amber/40 bg-amber/15"
+        : "border-signal/40 bg-signal/15";
+
+  return (
+    <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex justify-center sm:bottom-28">
+      <div className={`caption-page max-w-sm rounded-full border px-4 py-2 text-sm font-semibold text-ink shadow-diffusion backdrop-blur-xl ${toneClass}`}>
+        {toast.text}
+      </div>
     </div>
   );
 }
