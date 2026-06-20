@@ -18,16 +18,22 @@ The pre-meeting advisor briefing uses OpenAI Realtime over WebRTC:
 - The browser opens a `RTCPeerConnection` with microphone audio
 - The `oai-events` data channel sends typed test questions and response requests
 - The assistant is instructed to answer only from the Neo4j-backed client context
+- Realtime receives a `query_client_memory` tool that calls `/api/memory/query`
 
 This project adds the advisor-specific memory layer around that flow:
 
-- `/api/memory/query` reads memories/actions from Neo4j when configured
+- `/api/memory/query` reads memories/actions from Neo4j when configured and returns a normalized visual response
 - `/api/memory/approve` saves approved candidate memories into Neo4j
 - `/api/actions/approve` marks follow-ups as advisor-approved without sending client-facing messages
 - `/api/clients/[clientId]/context` reads client context through the selected data mode
 - `DATA_MODE=neo4j` reads advisor, client, meetings, memories, actions, graph, and briefing context from Neo4j
 - `DATA_MODE=hybrid` overlays Neo4j memory on the seeded demo journey
 - `DATA_MODE=demo` uses deterministic local demo data
+
+The briefing page also supports typed fallback Q&A without a Realtime connection.
+The adaptive memory panel maps each `/api/memory/query` response into stable L1/L1.5
+views: brief answers, memory cards, action tables, relationship graph, timeline,
+referral recommendation, evidence snippets, and missing-info next steps.
 
 ## Demo flow
 
@@ -54,8 +60,9 @@ Open `http://localhost:3000`.
 
 ## Optional services
 
-Copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` to enable the realtime
-token and live transcription routes:
+Copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` there only to enable
+the realtime token and live transcription routes. Do not commit `.env.local` or
+API keys.
 
 Set `DATA_MODE=neo4j` when you want to validate that the MVP is reading from Neo4j
 instead of fixed demo data. In this mode, Neo4j failures are visible failures. Use
