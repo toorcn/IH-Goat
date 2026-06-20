@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, Mic, Network, Radio } from "lucide-react";
+import { CalendarDays, CheckCircle2, MessageSquareText, Mic, Network, Radio } from "lucide-react";
 import type { CSSProperties } from "react";
 import {
   AppShell,
@@ -60,6 +60,12 @@ export default async function DashboardPage() {
                 <PrimaryButton href={`/briefing/${context.upcomingMeeting.id}`}>
                   Start briefing
                 </PrimaryButton>
+                <SecondaryButton
+                  href={`/qna/${context.upcomingMeeting.id}`}
+                  icon={<MessageSquareText className="h-4 w-4" />}
+                >
+                  Open L1.5 Q&A
+                </SecondaryButton>
                 <SecondaryButton
                   href={`/meeting/${context.upcomingMeeting.id}`}
                   icon={<Radio className="h-4 w-4" />}

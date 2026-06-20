@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CalendarClock, Network, Radio, ScrollText, Sparkles, User } from "lucide-react";
+import { CalendarClock, MessageSquareText, Network, ScrollText, User } from "lucide-react";
 import { ClientContextPanel } from "@/components/context-panel";
 import { InfoTabs } from "@/components/info-tabs";
 import { RelationshipGraph } from "@/components/relationship-graph";
@@ -20,7 +20,6 @@ export default async function BriefingPage({
   } catch {
     notFound();
   }
-  const meeting = context.upcomingMeeting.id === meetingId ? context.upcomingMeeting : context.lastMeeting;
   const meetingTime = new Intl.DateTimeFormat("en-SG", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -44,8 +43,8 @@ export default async function BriefingPage({
             </p>
           </div>
         </div>
-        <SecondaryButton href={`/meeting/${meeting.id}`} icon={<Radio className="h-4 w-4" />}>
-          Open live companion
+        <SecondaryButton href={`/qna/${meetingId}`} icon={<MessageSquareText className="h-4 w-4" />}>
+          Open Q&A-only view
         </SecondaryButton>
       </section>
 
@@ -54,30 +53,6 @@ export default async function BriefingPage({
       {/* Everything else is one tap away — the advisor pulls up only what they want. */}
       <InfoTabs
         tabs={[
-          {
-            id: "briefing",
-            label: "Briefing",
-            icon: <Sparkles className="h-4 w-4" />,
-            content: (
-              <div className="space-y-4">
-                <p className="whitespace-pre-wrap text-sm leading-7 text-ink">{context.briefing}</p>
-                {context.suggestedQuestions.length > 0 ? (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                      Good things to ask
-                    </p>
-                    <ul className="mt-2 space-y-1.5">
-                      {context.suggestedQuestions.map((question) => (
-                        <li key={question} className="text-sm leading-6 text-muted">
-                          {question}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            )
-          },
           {
             id: "context",
             label: "Client",
