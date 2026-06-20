@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Mic, Plus, Square, WandSparkles } from "lucide-react";
 import { useLiveMeetingRecorder } from "@/hooks/use-live-meeting-recorder";
 import { extractMeetingSignals } from "@/lib/demo-data";
+import { inferSpeaker, normalizeSpeakerLabel } from "@/lib/speaker-inference";
 import type { ClientContext, TranscriptEvent } from "@/lib/types";
 import { Badge, EmptyState, Panel } from "./ui";
 
@@ -31,16 +32,17 @@ export function PhoneOverlay({ context }: { context: ClientContext }) {
     clientId: context.client.id,
     chunkIntervalMs: 5000,
     onTranscript: (payload) => {
-      if (payload.text) addEvent(payload.text, "unknown");
+      if (payload.text) addEvent(payload.text, inferSpeaker(payload.text));
     }
   });
 
   function addEvent(text: string, speaker: TranscriptEvent["speaker"] = "client") {
-    const clean = text.trim();
+    const clean = normalizeSpeakerLabel(text);
     if (!clean) return;
+    const resolvedSpeaker = speaker === "unknown" ? inferSpeaker(text) : speaker;
     const nextEvent = {
       id: `overlay-${Date.now()}-${events.length + 1}`,
-      speaker,
+      speaker: resolvedSpeaker,
       text: clean,
       timestamp: new Date().toISOString()
     };

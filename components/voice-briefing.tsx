@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Mic, PlugZap, Send, Square } from "lucide-react";
 import type { ClientContext } from "@/lib/types";
+import { BriefingVisualOutput } from "./briefing-visual-output";
 import { Badge, EmptyState, Panel } from "./ui";
 
 type Message = {
@@ -35,6 +36,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const [statusText, setStatusText] = useState("Ready to start Realtime briefing.");
+  const [activeQuery, setActiveQuery] = useState("What should I know before meeting Mr. Tan?");
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
@@ -59,7 +61,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   }, []);
 
   async function startRealtimeBriefing() {
-    if (status === "connecting" || connected) return;
+    if (status === "connecting" || connected || demoMode) return;
     setStatus("connecting");
     setStatusText("Minting ephemeral token and opening WebRTC session...");
 
@@ -174,6 +176,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
     const clean = question.trim();
     if (!clean || !canAsk) return;
 
+    setActiveQuery(clean);
     appendMessage({ id: `advisor-${Date.now()}`, role: "advisor", text: clean });
     if (demoMode) {
       appendMessage({
@@ -306,7 +309,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
             <button
               type="button"
               onClick={() => void startRealtimeBriefing()}
-              disabled={status === "connecting" || connected}
+              disabled={status === "connecting" || connected || demoMode}
               className="focus-ring inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-cobalt disabled:cursor-not-allowed disabled:opacity-60"
             >
               <PlugZap className="h-4 w-4" />
@@ -315,7 +318,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
             <button
               type="button"
               onClick={stopRealtimeBriefing}
-              disabled={!connected && status !== "connecting"}
+              disabled={!connected && status !== "connecting" && !demoMode}
               className="focus-ring inline-flex items-center gap-2 rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-rose/50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Square className="h-4 w-4" />
@@ -401,6 +404,9 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
           </div>
         </aside>
       </div>
+      <div className="mt-4">
+        <BriefingVisualOutput context={context} query={activeQuery} />
+      </div>
     </Panel>
   );
 }
@@ -439,7 +445,15 @@ function answerDemoQuestion(question: string, context: ClientContext) {
   const normalized = question.toLowerCase();
   const openItems = context.memories.filter((memory) => memory.status === "open");
 
-  if (normalized.includes("introduce") || normalized.includes("who") || normalized.includes("referral")) {
+  if (
+    normalized.includes("introduce") ||
+    normalized.includes("intro") ||
+    normalized.includes("who") ||
+    normalized.includes("referral") ||
+    normalized.includes("specialist") ||
+    normalized.includes("evelyn") ||
+    normalized.includes("marcus")
+  ) {
     return [
       "Best grounded options:",
       "Evelyn Ng for estate planning because Mr. Tan's will update is unresolved.",

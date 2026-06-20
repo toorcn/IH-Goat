@@ -123,6 +123,20 @@ export type ExtractedMemory = {
   timestamp: string;
   sourceEventIds?: string[];
   confidence: number;
+  relatedPersonName?: string;
+  proposedNodes?: Array<{
+    label: GraphNode["type"];
+    id: string;
+    title: string;
+    properties: Record<string, string | number | boolean>;
+  }>;
+  proposedEdges?: Array<{
+    type: string;
+    sourceId: string;
+    targetId: string;
+    properties?: Record<string, string | number | boolean>;
+  }>;
+  recommendedAction?: string;
   proposedGraphMutation: string;
 };
 

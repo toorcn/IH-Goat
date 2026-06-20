@@ -22,9 +22,14 @@ The pre-meeting advisor briefing uses OpenAI Realtime over WebRTC:
 This project adds the advisor-specific memory layer around that flow:
 
 - `/api/memory/query` reads memories/actions from Neo4j when configured
+- `/api/memory/proposals` returns candidate graph updates from transcript events
 - `/api/memory/approve` saves approved candidate memories into Neo4j
+- `/api/memory/commit` aliases the approved commit path for the spec contract
 - `/api/clients/[clientId]/context` enriches seeded demo context with Neo4j memory
 - If Neo4j is not configured, deterministic demo data keeps the hackathon flow runnable
+
+Vapi, OpenClaw, Telegram, and WhatsApp are intentionally parked as roadmap levels; the
+current MVP implements the web, Realtime, Neo4j, live-capture, review, and graph surfaces.
 
 ## Run
 

@@ -34,6 +34,9 @@ export async function POST(request: Request) {
         type: "realtime",
         model,
         instructions: body.instructions ?? buildDefaultInstructions(),
+        reasoning: {
+          effort: "low"
+        },
         audio: {
           output: {
             voice: body.voice ?? "alloy"

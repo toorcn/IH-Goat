@@ -273,6 +273,16 @@ export function ReviewBoard({
                   </div>
                   <p className="mt-2 text-sm font-semibold text-ink">{memory.summary}</p>
                   <p className="mt-1 text-sm leading-6 text-muted">&quot;{memory.sourceSnippet}&quot;</p>
+                  {memory.recommendedAction ? (
+                    <p className="mt-2 rounded-md border border-signal/25 bg-signal/10 p-2 text-sm leading-5 text-ink">
+                      {memory.recommendedAction}
+                    </p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge tone="cobalt">{memory.proposedNodes?.length ?? 0} proposed nodes</Badge>
+                    <Badge tone="cobalt">{memory.proposedEdges?.length ?? 0} proposed edges</Badge>
+                    {memory.relatedPersonName ? <Badge tone="amber">{memory.relatedPersonName}</Badge> : null}
+                  </div>
                   <div className="mt-3 flex gap-2">
                     <button
                       type="button"

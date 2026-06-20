@@ -639,6 +639,25 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["nus", "jia"]),
       confidence: 0.88,
+      proposedNodes: [
+        {
+          label: "LifeEvent",
+          id: "life-jia-nus-reconfirmed",
+          title: "Jia En NUS milestone reconfirmed",
+          properties: {
+            summary: "Jia En's NUS milestone came up again in the meeting.",
+            confidence: 0.88
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "HAS_LIFE_EVENT",
+          sourceId: targetClientId,
+          targetId: "life-jia-nus-reconfirmed"
+        }
+      ],
+      recommendedAction: "Use Jia En's milestone as the warm opening before shifting into estate planning.",
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_LIFE_EVENT]->(:LifeEvent {title: 'Jia En NUS milestone reconfirmed'})"
     });
@@ -662,6 +681,25 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["will", "estate"]),
       confidence: 0.9,
+      proposedNodes: [
+        {
+          label: "Concern",
+          id: "concern-will-active",
+          title: "Will planning remains active",
+          properties: {
+            status: "open",
+            confidence: 0.9
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "HAS_CONCERN",
+          sourceId: targetClientId,
+          targetId: "concern-will-active"
+        }
+      ],
+      recommendedAction: "Ask what has made the will update hard to complete and offer one simple next step.",
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_CONCERN]->(:Concern {title: 'Will planning remains open'})"
     });
@@ -685,6 +723,26 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["lawyer", "evelyn", "marcus"]),
       confidence: 0.92,
+      relatedPersonName: "Evelyn Ng or Marcus Lee",
+      proposedNodes: [
+        {
+          label: "ReferralOpportunity",
+          id: "referral-estate",
+          title: "Estate Planning Intro",
+          properties: {
+            status: "ready_for_intro",
+            confidence: 0.92
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "HAS_REFERRAL_OPPORTUNITY",
+          sourceId: targetClientId,
+          targetId: "referral-estate"
+        }
+      ],
+      recommendedAction: "Confirm whether Mr. Tan prefers an estate planner first or a lawyer first, then draft the intro.",
       proposedGraphMutation:
         "MERGE (r:ReferralOpportunity {id: 'referral-estate'}) SET r.status = 'ready_for_intro'"
     });
@@ -708,6 +766,29 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["ong", "friend", "business succession"]),
       confidence: 0.8,
+      relatedPersonName: "Mr. Ong",
+      proposedNodes: [
+        {
+          label: "Person",
+          id: "person-ong",
+          title: "Mr. Ong",
+          properties: {
+            role: "family business owner",
+            confidence: 0.8
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "RELATED_TO",
+          sourceId: targetClientId,
+          targetId: "person-ong",
+          properties: {
+            relationship: "friend"
+          }
+        }
+      ],
+      recommendedAction: "Ask Mr. Tan for permission before tracking or contacting Mr. Ong.",
       proposedGraphMutation:
         "MERGE (p:Person {id: 'person-ong'}) SET p.name = 'Mr. Ong', p.role = 'family business owner'"
     });
@@ -721,6 +802,26 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["ong", "friend", "business succession"]),
       confidence: 0.76,
+      relatedPersonName: "Mr. Ong",
+      proposedNodes: [
+        {
+          label: "ReferralOpportunity",
+          id: "referral-business-succession",
+          title: "Business Succession Lead",
+          properties: {
+            status: "permission_needed",
+            confidence: 0.76
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "MENTIONED_OPPORTUNITY",
+          sourceId: "person-ong",
+          targetId: "referral-business-succession"
+        }
+      ],
+      recommendedAction: "Add Mr. Ong to the referral watchlist only after Mr. Tan confirms permission.",
       proposedGraphMutation:
         "MERGE (r:ReferralOpportunity {id: 'referral-business-succession'}) SET r.status = 'permission_needed'"
     });
@@ -744,6 +845,25 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["policy", "renewal"]),
       confidence: 0.83,
+      proposedNodes: [
+        {
+          label: "Concern",
+          id: "concern-policy-active",
+          title: "Policy renewal hesitation remains active",
+          properties: {
+            status: "open",
+            confidence: 0.83
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "HAS_CONCERN",
+          sourceId: targetClientId,
+          targetId: "concern-policy-active"
+        }
+      ],
+      recommendedAction: "Separate the policy renewal decision from the estate planning anxiety before presenting options.",
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_CONCERN]->(:Concern {title: 'Policy renewal hesitation remains active'})"
     });
@@ -760,8 +880,70 @@ export function extractMeetingSignals(
       timestamp: now,
       sourceEventIds: matchingEventIds(events, ["guide", "send"]),
       confidence: 0.87,
+      proposedNodes: [
+        {
+          label: "Action",
+          id: "action-guide",
+          title: "Send estate planning guide",
+          properties: {
+            status: "pending",
+            confidence: 0.87
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "HAS_ACTION",
+          sourceId: targetClientId,
+          targetId: "action-guide"
+        }
+      ],
+      recommendedAction: "Send the estate planning guide and include the will update checklist.",
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_ACTION]->(:Action {title: 'Send estate planning guide'})"
+    });
+  }
+
+  const reaction = latestClientReactionAfterAdvisor(events);
+  if (reaction) {
+    suggestions.push({
+      id: "suggest-reaction",
+      title: "Follow the emotional opening",
+      reason: "The client responded constructively after Sarah reframed the will-planning question.",
+      source: "Client reaction after advisor prompt",
+      priority: "medium"
+    });
+    extracted.push({
+      id: "extract-advisor-reaction",
+      clientId: targetClientId,
+      meetingId: options.meetingId,
+      category: "Emotional Cue",
+      summary: "Client reacted positively to a simpler, checklist-based framing of will planning.",
+      sourceSnippet: reaction.text,
+      timestamp: now,
+      sourceEventIds: [reaction.id],
+      confidence: 0.79,
+      proposedNodes: [
+        {
+          label: "Concern",
+          id: "concern-will-framing",
+          title: "Will planning feels easier with a checklist",
+          properties: {
+            status: "open",
+            confidence: 0.79
+          }
+        }
+      ],
+      proposedEdges: [
+        {
+          type: "HAS_CONCERN",
+          sourceId: targetClientId,
+          targetId: "concern-will-framing"
+        }
+      ],
+      recommendedAction: "Send a short checklist before introducing a specialist.",
+      proposedGraphMutation:
+        "MERGE (c:Client {id: 'client-tan'})-[:HAS_CONCERN]->(:Concern {title: 'Will planning feels easier with a checklist'})"
     });
   }
 
@@ -792,6 +974,26 @@ function matchingEventIds(events: TranscriptEvent[], terms: string[]) {
   return events
     .filter((event) => terms.some((term) => event.text.toLowerCase().includes(term)))
     .map((event) => event.id);
+}
+
+function latestClientReactionAfterAdvisor(events: TranscriptEvent[]) {
+  for (let index = events.length - 1; index > 0; index -= 1) {
+    const event = events[index];
+    const previous = events[index - 1];
+    const normalized = event.text.toLowerCase();
+    if (
+      previous.speaker === "advisor" &&
+      event.speaker === "client" &&
+      (normalized.includes("that question helps") ||
+        normalized.includes("simple checklist") ||
+        normalized.includes("trusted") ||
+        normalized.includes("less overwhelming"))
+    ) {
+      return event;
+    }
+  }
+
+  return undefined;
 }
 
 function dedupeById<T extends { id: string }>(items: T[]) {
