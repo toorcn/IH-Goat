@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Mic, Plus, Square, WandSparkles } from "lucide-react";
+import { useLiveMeetingRecorder } from "@/hooks/use-live-meeting-recorder";
 import { extractMeetingSignals } from "@/lib/demo-data";
 import type { ClientContext, ExtractedMemory, SilentSuggestion, TranscriptEvent } from "@/lib/types";
 import { Badge, EmptyState, Panel } from "./ui";
@@ -17,11 +18,19 @@ const demoStatements = [
 export function MeetingCompanion({ context }: { context: ClientContext }) {
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
   const [draft, setDraft] = useState("");
-  const [isLive, setIsLive] = useState(false);
 
   const signals = useMemo(() => extractMeetingSignals(events), [events]);
   const suggestions: SilentSuggestion[] = signals.suggestions;
   const extracted: ExtractedMemory[] = signals.extracted;
+  const recorder = useLiveMeetingRecorder({
+    meetingId: context.upcomingMeeting.id,
+    clientId: context.client.id,
+    onTranscript: (payload) => {
+      if (payload.text) {
+        addEvent(payload.text, "unknown");
+      }
+    }
+  });
 
   function addEvent(text: string, speaker: TranscriptEvent["speaker"] = "client") {
     const clean = text.trim();
@@ -43,20 +52,26 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
       <Panel
         title="Live Meeting Companion"
         eyebrow="Silent mode"
-        action={<Badge tone={isLive ? "rose" : "neutral"}>{isLive ? "listening" : "paused"}</Badge>}
+        action={
+          <Badge tone={recorder.isRecording ? "rose" : "neutral"}>
+            {recorder.isRecording ? "listening" : "paused"}
+          </Badge>
+        }
       >
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setIsLive(true)}
+            onClick={() => void recorder.startRecording()}
+            disabled={recorder.isStarting || recorder.isRecording}
             className="focus-ring inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-cobalt"
           >
             <Mic className="h-4 w-4" />
-            Start capture
+            {recorder.isStarting ? "Starting" : "Start capture"}
           </button>
           <button
             type="button"
-            onClick={() => setIsLive(false)}
+            onClick={() => void recorder.stopRecording()}
+            disabled={!recorder.isRecording}
             className="focus-ring inline-flex items-center gap-2 rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-rose/50"
           >
             <Square className="h-4 w-4" />
@@ -71,6 +86,35 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
             Simulate meeting
           </button>
         </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_2fr]">
+          <div className="rounded-lg border border-line bg-paper p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+              Mic level
+            </p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-signal transition-[width]"
+                style={{ width: `${Math.round(recorder.audioLevel * 100)}%` }}
+              />
+            </div>
+          </div>
+          <div className="rounded-lg border border-line bg-paper p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+              Browser capture
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              Microphone audio is buffered into WAV chunks, silence is skipped, and each chunk
+              is posted to the meeting transcription endpoint before memory extraction.
+            </p>
+          </div>
+        </div>
+
+        {recorder.error ? (
+          <div className="mt-3 rounded-lg border border-rose/30 bg-rose/10 p-3 text-sm leading-6 text-ink">
+            {recorder.error}
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-lg border border-line bg-paper p-3">
           <p className="text-sm font-semibold text-ink">

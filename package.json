@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "check:neo4j": "tsx scripts/check-neo4j.ts",
     "seed:neo4j": "tsx scripts/seed-neo4j.ts"
   },
   "dependencies": {

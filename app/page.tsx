@@ -3,10 +3,13 @@ import { AppShell, Badge, IconPill, Panel, PrimaryButton, StatusIcon } from "@/c
 import { ClientContextPanel } from "@/components/context-panel";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
-import { getClientContext } from "@/lib/demo-data";
+import { client } from "@/lib/demo-data";
+import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
-export default function DashboardPage() {
-  const context = getClientContext();
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const context = await getClientContextWithMemoryLayer(client.id);
   const meetingTime = new Intl.DateTimeFormat("en-SG", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -78,8 +81,8 @@ export default function DashboardPage() {
           <div className="mt-4 rounded-lg border border-line bg-paper p-3">
             <p className="text-sm font-semibold text-ink">Grounding rule</p>
             <p className="mt-1 text-sm leading-6 text-muted">
-              Assistant responses use the seeded client memory only. Unsupported questions fall
-              back to an explicit missing-memory response.
+              Assistant responses use the Neo4j-backed client memory context. Unsupported
+              questions return an explicit missing-memory response.
             </p>
           </div>
         </Panel>

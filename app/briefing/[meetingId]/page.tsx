@@ -4,7 +4,8 @@ import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
 import { AppShell, Badge, Panel, PrimaryButton } from "@/components/ui";
 import { VoiceBriefing } from "@/components/voice-briefing";
-import { getClientContext, getMeeting } from "@/lib/demo-data";
+import { getMeeting } from "@/lib/demo-data";
+import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export default async function BriefingPage({
   params
@@ -15,7 +16,7 @@ export default async function BriefingPage({
   const meeting = getMeeting(meetingId);
   if (!meeting) notFound();
 
-  const context = getClientContext(meeting.clientId);
+  const context = await getClientContextWithMemoryLayer(meeting.clientId);
 
   return (
     <AppShell>
@@ -26,8 +27,8 @@ export default async function BriefingPage({
             Brief Sarah before she meets {context.client.name}.
           </h1>
           <p className="mt-2 max-w-3xl text-base leading-7 text-muted">
-            Voice uses browser speech synthesis and dictation for a reliable local demo, while
-            the API route is ready to mint OpenAI Realtime sessions when an API key is present.
+            Voice runs through OpenAI Realtime over WebRTC with a server-minted ephemeral
+            token. The session is grounded in the Neo4j-backed client context shown below.
           </p>
         </div>
         <PrimaryButton href={`/meeting/${meeting.id}`}>Start live companion</PrimaryButton>
@@ -45,16 +46,16 @@ export default async function BriefingPage({
       <Panel title="Realtime Integration Readiness" eyebrow="OpenAI">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-line bg-paper p-3">
-            <p className="text-sm font-semibold text-ink">Session route</p>
-            <p className="mt-1 text-sm leading-6 text-muted">POST /api/realtime/session</p>
+            <p className="text-sm font-semibold text-ink">Token route</p>
+            <p className="mt-1 text-sm leading-6 text-muted">POST /api/realtime/token</p>
           </div>
           <div className="rounded-lg border border-line bg-paper p-3">
-            <p className="text-sm font-semibold text-ink">Fallback</p>
-            <p className="mt-1 text-sm leading-6 text-muted">Typed Q&amp;A and scripted voice briefing</p>
+            <p className="text-sm font-semibold text-ink">Transport</p>
+            <p className="mt-1 text-sm leading-6 text-muted">Browser WebRTC plus oai-events data channel</p>
           </div>
           <div className="rounded-lg border border-line bg-paper p-3">
             <p className="text-sm font-semibold text-ink">Grounding</p>
-            <p className="mt-1 text-sm leading-6 text-muted">Client context is fetched before response generation</p>
+            <p className="mt-1 text-sm leading-6 text-muted">Neo4j memory is embedded before response generation</p>
           </div>
         </div>
       </Panel>

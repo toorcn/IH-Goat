@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { ReviewBoard } from "@/components/review-board";
 import { AppShell, Badge, PrimaryButton } from "@/components/ui";
-import { getClientContext, getMeeting } from "@/lib/demo-data";
+import { getMeeting } from "@/lib/demo-data";
+import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
+
+export const dynamic = "force-dynamic";
 
 export default async function PostMeetingPage({
   params
@@ -13,7 +16,7 @@ export default async function PostMeetingPage({
   const meeting = getMeeting(meetingId);
   if (!meeting) notFound();
 
-  const context = getClientContext(meeting.clientId);
+  const context = await getClientContextWithMemoryLayer(meeting.clientId);
 
   return (
     <AppShell>

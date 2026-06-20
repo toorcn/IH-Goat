@@ -282,6 +282,7 @@ export function getClientContext(clientId = client.id): ClientContext {
       edges: graphEdges
     },
     suggestedQuestions,
+    memorySource: "demo",
     briefing:
       "You are meeting Mr. Tan Wee Seng at 10:30. You last met on 2026-04-08, about 10 weeks ago. Last time, will planning was unresolved and he seemed hesitant about policy renewal. His daughter Jia En recently got into NUS, so open by congratulating him before moving into estate planning. Useful next questions: what has made the will update hard to complete, and would an introduction to Evelyn Ng help?"
   };

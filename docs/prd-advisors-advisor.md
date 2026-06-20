@@ -468,7 +468,7 @@ UI components:
 ### Backend
 
 Recommended route responsibilities:
-- `POST /api/realtime/session`
+- `POST /api/realtime/token`
   - Server creates an ephemeral OpenAI Realtime session for the browser.
 - `GET /api/demo/calendar`
   - Returns seeded demo meetings.
@@ -495,6 +495,7 @@ Pre-meeting mode:
 
 Live meeting mode:
 - Use realtime audio/transcript capture.
+- Use browser microphone capture, buffered audio chunks, silence skipping, a transcription endpoint, and transcript-driven analysis.
 - Prefer text/silent outputs.
 - Use extraction prompts or structured output calls to create candidate memory/action records.
 - Keep human-in-the-loop approval for updates and follow-ups.
@@ -502,6 +503,11 @@ Live meeting mode:
 ### Memory Layer
 
 Use Neo4j as the source of truth for demo memory.
+
+Live meeting memory behavior:
+- Query Neo4j for additional client memory when building live context.
+- Save approved captured memories/actions to Neo4j after advisor review.
+- Store proposed graph mutations as auditable metadata first; do not execute arbitrary AI-generated Cypher without validation.
 
 Optional later additions:
 - Vector indexes in Neo4j for semantic memory retrieval.

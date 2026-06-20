@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getClientContext } from "@/lib/demo-data";
+import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export async function GET(
   _request: Request,
@@ -8,7 +8,8 @@ export async function GET(
   const { clientId } = await params;
 
   try {
-    return NextResponse.json(getClientContext(clientId).graph);
+    const context = await getClientContextWithMemoryLayer(clientId);
+    return NextResponse.json(context.graph);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown client" },

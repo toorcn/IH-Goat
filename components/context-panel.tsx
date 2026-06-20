@@ -7,6 +7,15 @@ export function ClientContextPanel({ context }: { context: ClientContext }) {
 
   return (
     <Panel title="Client Context" eyebrow={context.client.name}>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Badge tone={context.memorySource === "neo4j" ? "signal" : "amber"}>
+          {context.memorySource === "neo4j" ? "Neo4j memory" : "Demo memory"}
+        </Badge>
+        {context.memoryWarning ? (
+          <span className="text-xs font-medium text-muted">{context.memoryWarning}</span>
+        ) : null}
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <IconPill
           icon={<CalendarDays className="h-4 w-4" />}

@@ -3,7 +3,7 @@ import { ClientContextPanel } from "@/components/context-panel";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
 import { AppShell, Badge, Panel, PrimaryButton } from "@/components/ui";
-import { getClientContext } from "@/lib/demo-data";
+import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export default async function ClientPage({
   params
@@ -14,7 +14,7 @@ export default async function ClientPage({
   let context;
 
   try {
-    context = getClientContext(clientId);
+    context = await getClientContextWithMemoryLayer(clientId);
   } catch {
     notFound();
   }

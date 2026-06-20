@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { saveApprovedMemory } from "@/lib/neo4j-memory";
 import type { ExtractedMemory } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -8,10 +9,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing memory payload" }, { status: 400 });
   }
 
+  const writeResult = await saveApprovedMemory(body.memory);
+
   return NextResponse.json({
     status: "approved",
     memory: body.memory,
-    writeMode: "demo",
-    message: "In production this approval writes a graph mutation to Neo4j."
+    ...writeResult
   });
 }

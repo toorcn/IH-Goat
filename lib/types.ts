@@ -90,6 +90,8 @@ export type ClientContext = {
   };
   suggestedQuestions: string[];
   briefing: string;
+  memorySource?: "neo4j" | "demo";
+  memoryWarning?: string;
 };
 
 export type TranscriptEvent = {
