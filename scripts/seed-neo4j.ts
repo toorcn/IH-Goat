@@ -49,6 +49,9 @@ async function main() {
       MERGE (a)-[serves:MANAGES]->(c)
       SET serves.id = 'edge-manages',
           serves.label = 'manages'
+      MERGE (a)-[servesAlias:SERVES]->(c)
+      SET servesAlias.id = 'edge-serves',
+          servesAlias.label = 'serves'
       `,
       { advisor, client }
     );
@@ -91,6 +94,8 @@ async function main() {
         `,
         { memory }
       );
+
+      await seedTypedMemory(driver, memory);
     }
 
     for (const action of actions) {
@@ -98,14 +103,17 @@ async function main() {
         driver,
         `
         MATCH (c:Client {id: $action.clientId})
+        MATCH (m:Meeting {id: $action.meetingId})
         MERGE (act:Action {id: $action.id})
         SET act.title = $action.title,
             act.actionType = $action.actionType,
             act.dueAt = $action.dueAt,
             act.owner = $action.owner,
             act.status = $action.status,
+            act.meetingId = $action.meetingId,
             act.draftText = $action.draftText
         MERGE (c)-[:HAS_ACTION]->(act)
+        MERGE (act)-[:FOLLOWS_FROM]->(m)
         `,
         { action }
       );
@@ -163,6 +171,9 @@ async function main() {
       MERGE (referral)-[marcusRel:MATCHES_SPECIALIST]->(marcus)
       SET marcusRel.id = 'edge-marcus',
           marcusRel.label = 'legal support'
+      MERGE (referral)-[daughterInvolvement:INVOLVES]->(daughter)
+      SET daughterInvolvement.id = 'edge-referral-jia-en',
+          daughterInvolvement.label = 'family context'
       `,
       { clientId: client.id, spouse, daughter, referral, evelyn, marcus }
     );
@@ -190,6 +201,11 @@ function demoNodeIds() {
     client.id,
     ...meetings.map((meeting) => meeting.id),
     ...memories.map((memory) => memory.id),
+    ...memories.map((memory) => typedMemoryId(memory)),
+    "aa-smoke-approved-estate-planning",
+    "aa-smoke-approved-estate-planning-typed",
+    "realtime-test-will-planning",
+    "realtime-test-will-planning-typed",
     ...actions.map((action) => action.id),
     ...graphNodes.map((node) => node.id)
   ];
@@ -200,4 +216,63 @@ function executeWrite(driver: Driver, query: string, parameters: Record<string, 
     ...databaseConfig,
     routing: neo4j.routing.WRITE
   });
+}
+
+function seedTypedMemory(driver: Driver, memory: (typeof memories)[number]) {
+  const typed = typedMemoryFor(memory);
+  if (!typed) return Promise.resolve();
+
+  return executeWrite(
+    driver,
+    `
+    MATCH (c:Client {id: $clientId})
+    MATCH (m:Memory {id: $memoryId})
+    OPTIONAL MATCH (meeting:Meeting {id: $meetingId})
+    MERGE (typed:${typed.label} {id: $typedId})
+    SET typed.title = $title,
+        typed.summary = $summary,
+        typed.description = $summary,
+        typed.source = $source,
+        typed.sourceSnippet = $sourceSnippet,
+        typed.confidence = $confidence,
+        typed.status = $status,
+        typed.validFrom = $validFrom,
+        typed.lastConfirmedAt = $lastConfirmedAt,
+        typed.salience = $salience,
+        typed.updatedAt = datetime()
+    MERGE (c)-[typedRel:${typed.relationship}]->(typed)
+    SET typedRel.label = $relationshipLabel
+    MERGE (meeting)-[:PRODUCED]->(m)
+    `,
+    {
+      clientId: memory.clientId,
+      memoryId: memory.id,
+      meetingId: memory.source.includes("2026-04-08") ? "meeting-2026-04-08-tan" : "meeting-2026-06-20-tan",
+      typedId: typedMemoryId(memory),
+      title: memory.title,
+      summary: memory.summary,
+      source: memory.source,
+      sourceSnippet: memory.sourceSnippet,
+      confidence: memory.confidence,
+      status: memory.status,
+      validFrom: memory.validFrom,
+      lastConfirmedAt: memory.lastConfirmedAt,
+      salience: memory.salience,
+      relationshipLabel: typed.relationship.toLowerCase().replaceAll("_", " ")
+    }
+  );
+}
+
+function typedMemoryFor(memory: (typeof memories)[number]) {
+  if (memory.category === "Life Event") return { label: "LifeEvent", relationship: "HAS_LIFE_EVENT" };
+  if (memory.category === "Unresolved Concern" || memory.category === "Emotional Cue") {
+    return { label: "Concern", relationship: "HAS_CONCERN" };
+  }
+  if (memory.category === "Goal/Objective") return { label: "Objective", relationship: "HAS_OBJECTIVE" };
+  if (memory.category === "Promise/Commitment") return { label: "Promise", relationship: "HAS_PROMISE" };
+  return null;
+}
+
+function typedMemoryId(memory: (typeof memories)[number]) {
+  return `${memory.id}-typed`;
 }

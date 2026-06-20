@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       model,
       client_secret: null,
       message:
-        "OPENAI_API_KEY is not set. Configure it to start an OpenAI Realtime WebRTC briefing."
+        "OPENAI_API_KEY is not set. Realtime voice is disabled, but deterministic briefing context remains available."
     });
   }
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     const detail = await response.text();
     return NextResponse.json(
       {
-        error: "Failed to create realtime session",
+        error: "Failed to create realtime client secret",
         detail
       },
       { status: response.status }

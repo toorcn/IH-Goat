@@ -7,9 +7,9 @@ export function SuggestionFeed({ suggestions }: { suggestions: SilentSuggestion[
       {suggestions.length === 0 ? (
         <EmptyState>Suggestions appear here when live conversation touches known memory.</EmptyState>
       ) : (
-        <div className="space-y-3">
+        <div className="divide-y divide-line overflow-hidden rounded-[1.2rem] border border-line bg-paper">
           {suggestions.map((suggestion) => (
-            <article key={suggestion.id} className="rounded-lg border border-line bg-paper p-3">
+            <article key={suggestion.id} className="p-3 sm:p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge
                   tone={

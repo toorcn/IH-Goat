@@ -40,7 +40,7 @@ async function main() {
 
     console.log("Connection established");
     console.log({
-      uri,
+      uri: redactUri(uri),
       database: databaseConfig?.database ?? "default",
       serverInfo,
       ok: result.records[0]?.get("ok")?.toString?.() ?? result.records[0]?.get("ok")
@@ -62,4 +62,13 @@ function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: stri
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeout));
+}
+
+function redactUri(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.protocol}//${url.hostname.replace(/^[^.]+/, "<host>")}`;
+  } catch {
+    return "<redacted>";
+  }
 }

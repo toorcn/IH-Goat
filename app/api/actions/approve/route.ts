@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { saveApprovedAction } from "@/lib/neo4j-memory";
 import type { ActionItem } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -8,9 +9,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing action payload" }, { status: 400 });
   }
 
+  const writeResult = await saveApprovedAction(body.action);
+
   return NextResponse.json({
     status: "approved",
     action: body.action,
-    sendMode: "advisor_approval_required"
+    sendMode: "advisor_approval_required",
+    ...writeResult
   });
 }

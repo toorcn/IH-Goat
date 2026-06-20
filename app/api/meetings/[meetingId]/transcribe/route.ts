@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMeeting } from "@/lib/demo-data";
+import { getClientContextForMeeting } from "@/lib/neo4j-memory";
 
 export const runtime = "nodejs";
 
@@ -10,9 +10,9 @@ export async function POST(
   { params }: { params: Promise<{ meetingId: string }> }
 ) {
   const { meetingId } = await params;
-  const meeting = getMeeting(meetingId);
-
-  if (!meeting) {
+  try {
+    await getClientContextForMeeting(meetingId);
+  } catch {
     return NextResponse.json({ error: "Unknown meeting" }, { status: 404 });
   }
 

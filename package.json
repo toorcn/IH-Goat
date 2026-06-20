@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "check:data-source": "tsx scripts/check-data-source.ts",
+    "check:mvp": "tsx scripts/check-mvp.ts",
     "check:neo4j": "tsx scripts/check-neo4j.ts",
+    "check:neo4j-demo": "tsx scripts/check-neo4j-demo.ts",
     "seed:neo4j": "tsx scripts/seed-neo4j.ts"
   },
   "dependencies": {

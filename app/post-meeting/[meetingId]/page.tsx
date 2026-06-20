@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { ReviewBoard } from "@/components/review-board";
-import { AppShell, MetricCard, PrimaryButton, SectionHeader } from "@/components/ui";
-import { getMeeting } from "@/lib/demo-data";
-import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
+import { AppShell, Badge, PageIntro, PrimaryButton, SectionHeader } from "@/components/ui";
+import { getClientContextForMeeting } from "@/lib/neo4j-memory";
 
 export const dynamic = "force-dynamic";
 
@@ -13,25 +12,21 @@ export default async function PostMeetingPage({
   params: Promise<{ meetingId: string }>;
 }) {
   const { meetingId } = await params;
-  const meeting = getMeeting(meetingId);
-  if (!meeting) notFound();
-
-  const context = await getClientContextWithMemoryLayer(meeting.clientId);
+  let context;
+  try {
+    context = await getClientContextForMeeting(meetingId);
+  } catch {
+    notFound();
+  }
 
   return (
     <AppShell>
-      <SectionHeader
-        eyebrow="Post-meeting review"
+      <PageIntro
+        eyebrow={<Badge tone="signal">post-meeting review</Badge>}
         title="Convert the conversation into follow-through Sarah controls."
-        description="This page proves the human-in-the-loop checkpoint: proposed actions and graph updates stay pending until the advisor approves or ignores them."
+        description="Proposed actions and graph updates stay pending until the advisor approves or ignores them."
         action={<PrimaryButton href={`/client/${context.client.id}`}>View client graph</PrimaryButton>}
       />
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Follow-ups" value="Drafted" detail="Advisor can approve, edit, or ignore next actions." tone="signal" />
-        <MetricCard label="Memory updates" value="Pending" detail="Graph mutations require explicit approval." tone="amber" />
-        <MetricCard label="Evidence" value="Linked" detail="Review stays connected to the client graph." tone="cobalt" />
-      </div>
 
       <ReviewBoard context={context} />
 

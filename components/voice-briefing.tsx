@@ -266,14 +266,14 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       eyebrow="OpenAI Realtime"
       action={<Badge tone={status === "error" ? "rose" : connected ? "signal" : "neutral"}>{status}</Badge>}
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr]">
             <button
               type="button"
               onClick={() => void startRealtimeBriefing()}
               disabled={status === "connecting" || connected}
-              className="focus-ring inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-cobalt disabled:cursor-not-allowed disabled:opacity-60"
+              className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-cobalt disabled:cursor-not-allowed disabled:opacity-60"
             >
               <PlugZap className="h-4 w-4" />
               {status === "connecting" ? "Connecting" : "Start Realtime"}
@@ -282,26 +282,26 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
               type="button"
               onClick={stopRealtimeBriefing}
               disabled={!connected && status !== "connecting"}
-              className="focus-ring inline-flex items-center gap-2 rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-rose/50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-panel px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-rose/50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Square className="h-4 w-4" />
               Stop
             </button>
-            <div className="inline-flex items-center gap-2 rounded-md border border-signal/30 bg-signal/10 px-3 py-2 text-sm font-semibold text-ink">
+            <div className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-signal/30 bg-signal/10 px-4 py-2 text-sm font-semibold text-ink">
               <Mic className="h-4 w-4" />
               Mic routed to Realtime
             </div>
           </div>
 
-          <div className="rounded-lg border border-line bg-paper p-3 text-sm leading-6 text-muted">
+          <div className="rounded-[1.15rem] border border-line bg-paper p-3 text-sm leading-6 text-muted">
             {statusText}
           </div>
 
-          <div className="max-h-[420px] space-y-3 overflow-auto rounded-lg border border-line bg-paper p-3">
+          <div className="max-h-[420px] space-y-3 overflow-auto rounded-[1.2rem] border border-line bg-paper p-3">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`rounded-lg p-3 ${
+                className={`rounded-[1rem] p-3 ${
                   message.role === "assistant"
                     ? "bg-panel text-ink"
                     : message.role === "advisor"
@@ -310,7 +310,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
                 }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                  {message.role === "assistant" ? "Assistant" : message.role === "advisor" ? "Sarah" : "System"}
+                  {message.role === "assistant" ? "Assistant" : message.role === "advisor" ? context.advisor.name : "System"}
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text || "..."}</p>
               </div>
@@ -318,7 +318,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
           </div>
 
           <form
-            className="flex gap-2"
+            className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
             onSubmit={(event) => {
               event.preventDefault();
               submitTypedQuestion(draft);
@@ -328,13 +328,13 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               disabled={!connected}
-              placeholder={connected ? "Optional typed test: Who should I introduce Mr. Tan to?" : "Start Realtime to ask"}
-              className="focus-ring min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2.5 text-sm text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
+              placeholder={connected ? `Optional typed test for ${context.client.name}` : "Start Realtime to ask"}
+              className="focus-ring min-h-11 min-w-0 rounded-full border border-line bg-panel px-4 py-2.5 text-sm text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
             />
             <button
               type="submit"
               disabled={!connected || !draft.trim()}
-              className="focus-ring inline-flex items-center gap-2 rounded-md bg-signal px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-signal/80 disabled:cursor-not-allowed disabled:opacity-60"
+              className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-signal/80 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send className="h-4 w-4" />
               Ask
@@ -342,7 +342,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
           </form>
         </div>
 
-        <aside className="rounded-lg border border-line bg-paper p-3">
+        <aside className="rounded-[1.2rem] border border-line bg-paper p-3 sm:p-4">
           <p className="text-sm font-semibold text-ink">Suggested follow-ups</p>
           <div className="mt-3 space-y-2">
             {context.suggestedQuestions.map((question) => (
@@ -351,7 +351,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
                 type="button"
                 onClick={() => submitTypedQuestion(question)}
                 disabled={!connected}
-                className="focus-ring w-full rounded-md border border-line bg-panel px-3 py-2 text-left text-sm leading-5 text-ink transition hover:border-signal/50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="focus-ring pressable w-full rounded-[1rem] border border-line bg-panel px-3 py-2 text-left text-sm leading-5 text-ink transition-colors hover:border-signal/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {question}
               </button>
@@ -374,7 +374,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
 function buildRealtimeInstructions(context: ClientContext) {
   return [
     "You are Advisors' Advisor, an advisor-only pre-meeting voice assistant.",
-    "You are briefing Sarah Lim before a client meeting.",
+    `You are briefing ${context.advisor.name} before a client meeting.`,
     "Use only the client memory context below. Do not invent facts.",
     "If Sarah asks about something not present in context, say the memory graph does not contain that information.",
     "Keep answers concise, specific, and action-oriented.",

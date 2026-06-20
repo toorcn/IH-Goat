@@ -48,7 +48,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
       <Panel
         title="Live Meeting Companion"
         eyebrow="Silent mode"
@@ -58,12 +58,12 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
           </Badge>
         }
       >
-        <div className="flex flex-wrap gap-2">
+        <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr]">
           <button
             type="button"
             onClick={() => void recorder.startRecording()}
             disabled={recorder.isStarting || recorder.isRecording}
-            className="focus-ring inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-cobalt"
+            className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-cobalt disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Mic className="h-4 w-4" />
             {recorder.isStarting ? "Starting" : "Start capture"}
@@ -72,7 +72,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
             type="button"
             onClick={() => void recorder.stopRecording()}
             disabled={!recorder.isRecording}
-            className="focus-ring inline-flex items-center gap-2 rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-rose/50"
+            className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-panel px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-rose/50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Square className="h-4 w-4" />
             Stop
@@ -80,16 +80,16 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
           <button
             type="button"
             onClick={() => demoStatements.forEach((statement, index) => setTimeout(() => addEvent(statement), index * 180))}
-            className="focus-ring inline-flex items-center gap-2 rounded-md border border-signal/30 bg-signal/10 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-signal/20"
+            className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-signal/30 bg-signal/10 px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-signal/20"
           >
             <WandSparkles className="h-4 w-4" />
             Simulate meeting
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_2fr]">
-          <div className="rounded-lg border border-line bg-paper p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+        <div className="mt-5 grid gap-3 sm:grid-cols-[0.75fr_1.25fr]">
+          <div className="rounded-[1.15rem] border border-line bg-paper p-3">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted">
               Mic level
             </p>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-line">
@@ -99,8 +99,8 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
               />
             </div>
           </div>
-          <div className="rounded-lg border border-line bg-paper p-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          <div className="rounded-[1.15rem] border border-line bg-paper p-3">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted">
               Browser capture
             </p>
             <p className="mt-1 text-sm leading-6 text-muted">
@@ -111,12 +111,12 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
         </div>
 
         {recorder.error ? (
-          <div className="mt-3 rounded-lg border border-rose/30 bg-rose/10 p-3 text-sm leading-6 text-ink">
+          <div className="mt-3 rounded-[1.15rem] border border-rose/30 bg-rose/10 p-3 text-sm leading-6 text-ink">
             {recorder.error}
           </div>
         ) : null}
 
-        <div className="mt-4 rounded-lg border border-line bg-paper p-3">
+        <div className="mt-4 rounded-[1.2rem] border border-line bg-paper p-3 sm:p-4">
           <p className="text-sm font-semibold text-ink">
             Transcript stream for {context.client.name}
           </p>
@@ -125,7 +125,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
               <EmptyState>Use simulation or add a line manually to trigger suggestions.</EmptyState>
             ) : (
               events.map((event) => (
-                <article key={event.id} className="rounded-md border border-line bg-panel p-3">
+                <article key={event.id} className="rounded-[1rem] border border-line bg-panel p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={event.speaker === "client" ? "cobalt" : "neutral"}>{event.speaker}</Badge>
                     <span className="text-xs font-medium text-muted">
@@ -143,7 +143,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
         </div>
 
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
           onSubmit={(event) => {
             event.preventDefault();
             addEvent(draft);
@@ -153,11 +153,11 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Type a meeting statement for demo capture"
-            className="focus-ring min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2.5 text-sm text-ink placeholder:text-muted"
+            className="focus-ring min-h-11 min-w-0 rounded-full border border-line bg-panel px-4 py-2.5 text-sm text-ink placeholder:text-muted"
           />
           <button
             type="submit"
-            className="focus-ring inline-flex items-center gap-2 rounded-md bg-signal px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-signal/80"
+            className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-signal/80"
           >
             <Plus className="h-4 w-4" />
             Add
@@ -165,7 +165,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
         </form>
       </Panel>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <SuggestionFeed suggestions={suggestions} />
         <Panel title="Captured Memory" eyebrow="Candidate updates">
           {extracted.length === 0 ? (
@@ -173,7 +173,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
           ) : (
             <div className="space-y-3">
               {extracted.map((item) => (
-                <article key={item.id} className="rounded-lg border border-line bg-paper p-3">
+                <article key={item.id} className="rounded-[1.15rem] border border-line bg-paper p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="signal">{item.category}</Badge>
                     <span className="text-xs font-medium text-muted">
@@ -182,7 +182,7 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
                   </div>
                   <p className="mt-2 text-sm font-semibold text-ink">{item.summary}</p>
                   <p className="mt-1 text-sm leading-6 text-muted">&quot;{item.sourceSnippet}&quot;</p>
-                  <p className="mt-2 rounded-md bg-panel p-2 font-mono text-xs leading-5 text-muted">
+                  <p className="mt-2 overflow-x-auto rounded-[0.85rem] bg-panel p-2 font-mono text-xs leading-5 text-muted">
                     {item.proposedGraphMutation}
                   </p>
                 </article>

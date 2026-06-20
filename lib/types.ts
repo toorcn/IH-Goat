@@ -48,6 +48,8 @@ export type MemoryItem = {
   status: "known" | "open" | "pending" | "approved" | "ignored";
   validFrom?: string;
   lastConfirmedAt?: string;
+  updatedAt?: string;
+  createdAt?: string;
   salience: number;
 };
 
@@ -91,6 +93,7 @@ export type ClientContext = {
   suggestedQuestions: string[];
   briefing: string;
   memorySource?: "neo4j" | "demo";
+  dataMode?: "neo4j" | "hybrid" | "demo";
   memoryWarning?: string;
 };
 

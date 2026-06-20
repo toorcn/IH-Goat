@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import { ClientContextPanel } from "@/components/context-panel";
 import { MeetingCompanion } from "@/components/meeting-companion";
-import { AppShell, MetricCard, PrimaryButton, SectionHeader } from "@/components/ui";
-import { getMeeting } from "@/lib/demo-data";
-import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
+import { AppShell, Badge, PageIntro, PrimaryButton, SectionHeader } from "@/components/ui";
+import { getClientContextForMeeting } from "@/lib/neo4j-memory";
 
 export const dynamic = "force-dynamic";
 
@@ -13,25 +12,22 @@ export default async function MeetingPage({
   params: Promise<{ meetingId: string }>;
 }) {
   const { meetingId } = await params;
-  const meeting = getMeeting(meetingId);
-  if (!meeting) notFound();
-
-  const context = await getClientContextWithMemoryLayer(meeting.clientId);
+  let context;
+  try {
+    context = await getClientContextForMeeting(meetingId);
+  } catch {
+    notFound();
+  }
+  const meeting = context.upcomingMeeting.id === meetingId ? context.upcomingMeeting : context.lastMeeting;
 
   return (
     <AppShell>
-      <SectionHeader
-        eyebrow="Silent meeting companion"
-        title="Keep the client conversation human while Sarah gets live prompts."
-        description="This page proves live capture, advisor-only suggestions, and candidate memory extraction from the meeting stream."
+      <PageIntro
+        eyebrow={<Badge tone="rose">silent meeting mode</Badge>}
+        title="Keep client conversation human while Sarah gets live prompts."
+        description="The companion treats audio as one conversation stream for MVP purposes, extracts candidate facts, and shows advisor-only suggestions."
         action={<PrimaryButton href={`/post-meeting/${meeting.id}`}>End and review</PrimaryButton>}
       />
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Capture" value="Audio" detail="Browser microphone chunks post to transcription." tone="rose" />
-        <MetricCard label="Advisor view" value="Silent" detail="Suggestions appear without client-facing interruption." tone="cobalt" />
-        <MetricCard label="Memory" value="Pending" detail="New facts stay candidates until review." tone="amber" />
-      </div>
 
       <MeetingCompanion context={context} />
 

@@ -7,26 +7,28 @@ type FeatureTone = "signal" | "amber" | "rose" | "cobalt";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b border-line/80 pb-5 md:flex-row md:items-center md:justify-between">
-          <Link href="/" className="focus-ring group w-fit rounded-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-              Peak Wealth Advisors
-            </p>
-            <h1 className="text-2xl font-semibold tracking-normal text-ink">
-              Advisors&apos; Advisor
-            </h1>
-          </Link>
-          <nav className="flex flex-wrap gap-2 text-sm font-medium text-muted">
-            <NavLink href="/">Dashboard</NavLink>
-            <NavLink href="/briefing/meeting-2026-06-20-tan">Briefing</NavLink>
-            <NavLink href="/meeting/meeting-2026-06-20-tan">Meeting</NavLink>
-            <NavLink href="/client/client-tan">Client</NavLink>
-            <NavLink href="/post-meeting/meeting-2026-06-20-tan">Review</NavLink>
-          </nav>
+    <main className="min-h-[100dvh]">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 px-4 py-4 sm:px-6 lg:gap-7 lg:px-8 lg:py-6">
+        <header className="rounded-[1.65rem] border border-line/80 bg-panel/82 p-2 shadow-diffusion backdrop-blur-xl">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <Link href="/" className="focus-ring pressable group w-fit rounded-[1.15rem] px-3 py-2">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
+                Peak Wealth Advisors
+              </p>
+              <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+                Advisors&apos; Advisor
+              </h1>
+            </Link>
+            <nav className="-mx-2 flex gap-2 overflow-x-auto px-2 pb-1 text-sm font-medium text-muted md:mx-0 md:flex-wrap md:justify-end md:overflow-visible md:px-0 md:pb-0">
+              <NavLink href="/">Dashboard</NavLink>
+              <NavLink href="/briefing/meeting-2026-06-20-tan">Briefing</NavLink>
+              <NavLink href="/meeting/meeting-2026-06-20-tan">Meeting</NavLink>
+              <NavLink href="/client/client-tan">Client</NavLink>
+              <NavLink href="/post-meeting/meeting-2026-06-20-tan">Review</NavLink>
+            </nav>
+          </div>
         </header>
-        {children}
+        <div className="flex flex-col gap-5 lg:gap-7">{children}</div>
       </div>
     </main>
   );
@@ -36,7 +38,7 @@ export function NavLink({ href, children }: { href: string; children: ReactNode 
   return (
     <Link
       href={href}
-      className="focus-ring rounded-md border border-line bg-panel/90 px-3 py-2 text-ink shadow-sm transition hover:border-signal/50 hover:bg-panel hover:text-signal"
+      className="focus-ring pressable shrink-0 rounded-full border border-transparent px-3.5 py-2 text-ink transition-colors hover:border-line hover:bg-paper"
     >
       {children}
     </Link>
@@ -57,15 +59,15 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-line/90 bg-panel/95 p-4 shadow-soft ${className}`}>
-      <div className="mb-4 flex items-start justify-between gap-4">
+    <section className={`surface-enter rounded-[1.6rem] border border-line/80 bg-panel p-4 shadow-diffusion sm:p-5 ${className}`}>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           {eyebrow ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
               {eyebrow}
             </p>
           ) : null}
-          <h2 className="text-lg font-semibold tracking-normal text-ink">{title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-ink sm:text-xl">{title}</h2>
         </div>
         {action}
       </div>
@@ -194,7 +196,7 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
   };
 
   return (
-    <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${tones[tone]}`}>
+    <span className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold leading-none ${tones[tone]}`}>
       {children}
     </span>
   );
@@ -212,7 +214,27 @@ export function PrimaryButton({
   return (
     <Link
       href={href}
-      className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-cobalt"
+      className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-colors hover:bg-cobalt"
+    >
+      {children}
+      {icon}
+    </Link>
+  );
+}
+
+export function SecondaryButton({
+  href,
+  children,
+  icon = <ArrowRight className="h-4 w-4" />
+}: {
+  href: string;
+  children: ReactNode;
+  icon?: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-panel px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-signal/50 hover:bg-paper"
     >
       {children}
       {icon}
@@ -232,14 +254,14 @@ export function IconPill({
   tone?: BadgeTone;
 }) {
   return (
-    <div className="rounded-lg border border-line bg-paper p-3">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+    <div className="hover-lift rounded-[1.15rem] border border-line/80 bg-paper/80 p-3 transition-transform">
+      <div className="flex items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted">
         <span className={tone === "signal" ? "text-signal" : tone === "amber" ? "text-amber" : "text-muted"}>
           {icon}
         </span>
         {label}
       </div>
-      <p className="mt-2 text-sm font-semibold text-ink">{value}</p>
+      <p className="mt-2 text-sm font-semibold leading-5 text-ink">{value}</p>
     </div>
   );
 }
@@ -253,8 +275,34 @@ export function StatusIcon({ status }: { status: "ready" | "warning" | "live" | 
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-line bg-paper px-4 py-8 text-center text-sm text-muted">
-      {children}
+    <div className="rounded-[1.25rem] border border-dashed border-line bg-paper/80 px-4 py-8 text-center text-sm text-muted">
+      <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
+      <p>{children}</p>
     </div>
+  );
+}
+
+export function PageIntro({
+  eyebrow,
+  title,
+  description,
+  action
+}: {
+  eyebrow: ReactNode;
+  title: ReactNode;
+  description: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="grid gap-5 py-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <div>
+        {typeof eyebrow === "string" ? <Badge tone="signal">{eyebrow}</Badge> : eyebrow}
+        <h1 className="mt-4 max-w-4xl text-3xl font-semibold leading-[0.98] tracking-tight text-ink sm:text-4xl lg:text-5xl">
+          {title}
+        </h1>
+        <p className="mt-4 max-w-[65ch] text-base leading-7 text-muted">{description}</p>
+      </div>
+      {action ? <div className="flex flex-wrap gap-2 md:justify-end">{action}</div> : null}
+    </section>
   );
 }
