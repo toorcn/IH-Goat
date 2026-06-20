@@ -1,5 +1,5 @@
 import neo4j, { Driver } from "neo4j-driver";
-import { getClientContext, getMeeting } from "./demo-data";
+import { getClientContext, getMeeting, partnerProfiles } from "./demo-data";
 import type {
   ActionItem,
   Advisor,
@@ -8,8 +8,13 @@ import type {
   ExtractedMemory,
   GraphEdge,
   GraphNode,
+  LivePartnerRecommendation,
+  LivePartnerRecommendationResponse,
+  LiveMemorySearchResponse,
+  MemoryCategory,
   Meeting,
-  MemoryItem
+  MemoryItem,
+  PartnerType
 } from "./types";
 
 type DataMode = "neo4j" | "hybrid" | "demo";
@@ -241,10 +246,10 @@ async function readNeo4jClientContext(clientId: string, graphDriver: Driver): Pr
       MATCH (a:Advisor)-[:MANAGES]->(:Client {id: $clientId})
       RETURN a AS node
       UNION
-      MATCH (:Client {id: $clientId})-[:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(node)
+      MATCH (:Client {id: $clientId})-[:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]-(node)
       RETURN node
       UNION
-      MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]->(:ReferralOpportunity)-[:MATCHES_SPECIALIST|INVOLVES]->(node)
+      MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]-(:ReferralOpportunity)-[:MATCHES_SPECIALIST|INVOLVES]-(node)
       RETURN node
       `,
       { clientId },
@@ -253,13 +258,30 @@ async function readNeo4jClientContext(clientId: string, graphDriver: Driver): Pr
     graphDriver.executeQuery(
       `
       MATCH (source:Advisor)-[r:MANAGES]->(target:Client {id: $clientId})
-      RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+      RETURN
+        coalesce(source.id, elementId(source)) AS source,
+        coalesce(target.id, elementId(target)) AS target,
+        type(r) AS type,
+        coalesce(r.label, r.relationship) AS label,
+        coalesce(r.id, elementId(r)) AS id
       UNION
-      MATCH (source:Client {id: $clientId})-[r:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(target)
-      RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+      MATCH (:Client {id: $clientId})-[r:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]-(target)
+      WITH startNode(r) AS source, endNode(r) AS target, r
+      RETURN
+        coalesce(source.id, elementId(source)) AS source,
+        coalesce(target.id, elementId(target)) AS target,
+        type(r) AS type,
+        coalesce(r.label, r.relationship) AS label,
+        coalesce(r.id, elementId(r)) AS id
       UNION
-      MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]->(source:ReferralOpportunity)-[r:MATCHES_SPECIALIST|INVOLVES]->(target)
-      RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+      MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]-(:ReferralOpportunity)-[r:MATCHES_SPECIALIST|INVOLVES]-(target)
+      WITH startNode(r) AS source, endNode(r) AS target, r
+      RETURN
+        coalesce(source.id, elementId(source)) AS source,
+        coalesce(target.id, elementId(target)) AS target,
+        type(r) AS type,
+        coalesce(r.label, r.relationship) AS label,
+        coalesce(r.id, elementId(r)) AS id
       `,
       { clientId },
       getQueryConfig(neo4j.routing.READ)
@@ -384,6 +406,268 @@ export async function queryClientMemory(clientId: string, query: string) {
   }
 }
 
+export async function searchClientMemory(
+  clientId: string,
+  query: string,
+  reason = "",
+  limit = 5
+): Promise<LiveMemorySearchResponse> {
+  const graphDriver = getDriver();
+  const normalizedLimit = Math.max(1, Math.min(8, Math.floor(limit)));
+  const terms = liveSearchTerms(query);
+
+  if (!graphDriver) {
+    const context = getClientContext(clientId);
+    return {
+      clientId,
+      query,
+      reason,
+      source: "demo",
+      results: searchDemoContext(context, terms, normalizedLimit),
+      warning: "Neo4j is not configured; searched demo memory."
+    };
+  }
+
+  try {
+    const result = await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      CALL {
+        WITH c
+        MATCH (c)-[:HAS_MEMORY]->(m:Memory)
+        WHERE $isEmpty OR any(term IN $terms WHERE
+          toLower(coalesce(m.title, '') + ' ' + coalesce(m.summary, '') + ' ' + coalesce(m.category, '') + ' ' + coalesce(m.sourceSnippet, '')) CONTAINS term
+        )
+        RETURN
+          'memory' AS type,
+          m.id AS id,
+          coalesce(m.title, m.category, 'Memory') AS title,
+          coalesce(m.summary, '') AS summary,
+          coalesce(m.source, 'Client memory') AS source,
+          m.category AS category,
+          m.status AS status,
+          m.sourceSnippet AS snippet,
+          m.confidence AS confidence,
+          null AS edgeLabel
+        UNION
+        WITH c
+        MATCH (c)-[:HAS_ACTION]->(a:Action)
+        WHERE $isEmpty OR any(term IN $terms WHERE
+          toLower(coalesce(a.title, '') + ' ' + coalesce(a.actionType, '') + ' ' + coalesce(a.status, '') + ' ' + coalesce(a.draftText, '')) CONTAINS term
+        )
+        RETURN
+          'action' AS type,
+          a.id AS id,
+          coalesce(a.title, 'Action') AS title,
+          coalesce(a.draftText, a.actionType, '') AS summary,
+          coalesce(a.meetingId, 'Client action') AS source,
+          null AS category,
+          a.status AS status,
+          a.draftText AS snippet,
+          null AS confidence,
+          null AS edgeLabel
+        UNION
+        WITH c
+        MATCH (c)-[r:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(n)
+        WHERE $isEmpty OR any(term IN $terms WHERE
+          toLower(coalesce(n.label, n.name, n.title, '') + ' ' + coalesce(n.note, n.summary, n.description, '') + ' ' + type(r) + ' ' + coalesce(r.label, '')) CONTAINS term
+        )
+        RETURN
+          'graph' AS type,
+          coalesce(n.id, elementId(n)) AS id,
+          coalesce(n.label, n.name, n.title, 'Related node') AS title,
+          coalesce(n.note, n.summary, n.description, '') AS summary,
+          'Client graph' AS source,
+          null AS category,
+          n.status AS status,
+          coalesce(n.note, n.summary, n.description, '') AS snippet,
+          null AS confidence,
+          coalesce(r.label, type(r)) AS edgeLabel
+        UNION
+        WITH c
+        MATCH (c)-[:HAS_REFERRAL_OPPORTUNITY]->(:ReferralOpportunity)-[r:MATCHES_SPECIALIST|INVOLVES]->(n)
+        WHERE $isEmpty OR any(term IN $terms WHERE
+          toLower(coalesce(n.label, n.name, n.title, '') + ' ' + coalesce(n.note, n.summary, n.description, '') + ' ' + type(r) + ' ' + coalesce(r.label, '')) CONTAINS term
+        )
+        RETURN
+          'graph' AS type,
+          coalesce(n.id, elementId(n)) AS id,
+          coalesce(n.label, n.name, n.title, 'Related node') AS title,
+          coalesce(n.note, n.summary, n.description, '') AS summary,
+          'Client graph' AS source,
+          null AS category,
+          n.status AS status,
+          coalesce(n.note, n.summary, n.description, '') AS snippet,
+          null AS confidence,
+          coalesce(r.label, type(r)) AS edgeLabel
+      }
+      RETURN type, id, title, summary, source, category, status, snippet, confidence, edgeLabel
+      LIMIT toInteger($limit)
+      `,
+      { clientId, terms, isEmpty: terms.length === 0, limit: normalizedLimit },
+      getQueryConfig(neo4j.routing.READ)
+    );
+
+    return {
+      clientId,
+      query,
+      reason,
+      source: "neo4j",
+      results: result.records.map((record) => ({
+        id: stringValue(record.get("id"), "neo4j-result"),
+        type: liveResultType(record.get("type")),
+        title: stringValue(record.get("title"), "Client memory"),
+        summary: stringValue(record.get("summary")),
+        source: stringValue(record.get("source"), "Neo4j"),
+        category: memoryCategoryValue(record.get("category")),
+        status: stringValue(record.get("status")) || undefined,
+        snippet: stringValue(record.get("snippet")) || undefined,
+        confidence: numberValue(record.get("confidence")),
+        edgeLabel: stringValue(record.get("edgeLabel")) || undefined
+      }))
+    };
+  } catch (error) {
+    const context = getClientContext(clientId);
+    return {
+      clientId,
+      query,
+      reason,
+      source: "demo",
+      results: searchDemoContext(context, terms, normalizedLimit),
+      warning: error instanceof Error ? error.message : "Neo4j unavailable; searched demo memory."
+    };
+  }
+}
+
+export async function recommendClientPartners(
+  clientId: string,
+  need: string,
+  reason = "",
+  limit = 3
+): Promise<LivePartnerRecommendationResponse> {
+  const graphDriver = getDriver();
+  const normalizedLimit = Math.max(1, Math.min(5, Math.floor(limit)));
+  const terms = liveSearchTerms(need);
+
+  if (!graphDriver) {
+    const context = getClientContext(clientId);
+    return {
+      clientId,
+      need,
+      reason,
+      source: "demo",
+      results: recommendDemoPartners(context, terms, need, normalizedLimit),
+      warning: "Neo4j is not configured; searched demo partner directory."
+    };
+  }
+
+  try {
+    const result = await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      OPTIONAL MATCH (advisor:Advisor)-[:MANAGES]->(c)
+      WITH c, advisor
+      CALL {
+        WITH c
+        MATCH (c)-[:HAS_REFERRAL_OPPORTUNITY]->(opportunity:ReferralOpportunity)-[r:MATCHES_SPECIALIST|INVOLVES]->(partner:Specialist)
+        WHERE $isEmpty OR any(term IN $terms WHERE
+          toLower(
+            coalesce(opportunity.title, '') + ' ' +
+            coalesce(opportunity.label, '') + ' ' +
+            coalesce(opportunity.need, '') + ' ' +
+            coalesce(opportunity.reason, '') + ' ' +
+            coalesce(opportunity.note, '') + ' ' +
+            coalesce(partner.name, '') + ' ' +
+            coalesce(partner.label, '') + ' ' +
+            coalesce(partner.partnerType, '') + ' ' +
+            coalesce(partner.specialty, '') + ' ' +
+            coalesce(partner.role, '') + ' ' +
+            coalesce(partner.note, '') + ' ' +
+            coalesce(partner.searchText, '')
+          ) CONTAINS term
+        )
+        RETURN
+          coalesce(partner.id, elementId(partner)) AS id,
+          coalesce(partner.name, partner.label, 'Partner') AS name,
+          coalesce(partner.partnerType, partner.role, 'other') AS partnerType,
+          coalesce(partner.specialty, partner.role, partner.note, 'Specialist') AS specialty,
+          partner.organization AS organization,
+          coalesce(partner.note, '') AS note,
+          coalesce(partner.introStatus, partner.status, 'available') AS status,
+          coalesce(r.label, type(r)) AS relationshipLabel,
+          coalesce(opportunity.title, opportunity.label, opportunity.need, $need) AS evidence,
+          'Neo4j referral graph' AS source,
+          0.94 AS confidence
+        UNION
+        WITH c, advisor
+        MATCH (advisor)-[networkRel:HAS_PARTNER]->(partner:Specialist)
+        WHERE NOT $isEmpty
+          AND any(term IN $terms WHERE
+            toLower(
+              coalesce(partner.name, '') + ' ' +
+              coalesce(partner.label, '') + ' ' +
+              coalesce(partner.partnerType, '') + ' ' +
+              coalesce(partner.specialty, '') + ' ' +
+              coalesce(partner.role, '') + ' ' +
+              coalesce(partner.note, '') + ' ' +
+              coalesce(partner.searchText, '')
+            ) CONTAINS term
+          )
+        RETURN
+          coalesce(partner.id, elementId(partner)) AS id,
+          coalesce(partner.name, partner.label, 'Partner') AS name,
+          coalesce(partner.partnerType, partner.role, 'other') AS partnerType,
+          coalesce(partner.specialty, partner.role, partner.note, 'Specialist') AS specialty,
+          partner.organization AS organization,
+          coalesce(partner.note, '') AS note,
+          coalesce(partner.introStatus, partner.status, 'available') AS status,
+          coalesce(networkRel.label, type(networkRel)) AS relationshipLabel,
+          $need AS evidence,
+          'Neo4j partner directory' AS source,
+          0.76 AS confidence
+      }
+      RETURN id, name, partnerType, specialty, organization, note, status, relationshipLabel, evidence, source, max(confidence) AS confidence
+      ORDER BY confidence DESC, name ASC
+      LIMIT toInteger($limit)
+      `,
+      { clientId, need, terms, isEmpty: terms.length === 0, limit: normalizedLimit },
+      getQueryConfig(neo4j.routing.READ)
+    );
+
+    return {
+      clientId,
+      need,
+      reason,
+      source: "neo4j",
+      results: result.records.map((record) =>
+        partnerRecommendationFromRecord({
+          id: record.get("id"),
+          name: record.get("name"),
+          partnerType: record.get("partnerType"),
+          specialty: record.get("specialty"),
+          organization: record.get("organization"),
+          note: record.get("note"),
+          status: record.get("status"),
+          relationshipLabel: record.get("relationshipLabel"),
+          evidence: record.get("evidence"),
+          source: record.get("source"),
+          confidence: record.get("confidence")
+        })
+      )
+    };
+  } catch (error) {
+    const context = getClientContext(clientId);
+    return {
+      clientId,
+      need,
+      reason,
+      source: "demo",
+      results: recommendDemoPartners(context, terms, need, normalizedLimit),
+      warning: error instanceof Error ? error.message : "Neo4j unavailable; searched demo partner directory."
+    };
+  }
+}
+
 export async function saveApprovedMemory(memory: ExtractedMemory) {
   const graphDriver = getDriver();
   if (!graphDriver) {
@@ -395,6 +679,40 @@ export async function saveApprovedMemory(memory: ExtractedMemory) {
   }
 
   try {
+    const normalizedSummary = normalizeMemoryText(memory.summary);
+    const normalizedSnippet = normalizeMemoryText(memory.sourceSnippet);
+    const duplicateResult = await graphDriver.executeQuery(
+      `
+      MATCH (:Client {id: $clientId})-[:HAS_MEMORY]->(existing:Memory)
+      WHERE existing.category = $category
+        AND (
+          toLower(coalesce(existing.summary, '')) = $normalizedSummary
+          OR ($normalizedSnippet <> '' AND toLower(coalesce(existing.sourceSnippet, '')) = $normalizedSnippet)
+          OR ($allowContains AND toLower(coalesce(existing.summary, '')) <> '' AND toLower(coalesce(existing.summary, '')) CONTAINS $normalizedSummary)
+          OR ($allowContains AND toLower(coalesce(existing.summary, '')) <> '' AND $normalizedSummary CONTAINS toLower(coalesce(existing.summary, '')))
+        )
+      RETURN existing.id AS id
+      LIMIT 1
+      `,
+      {
+        clientId: memory.clientId,
+        category: memory.category,
+        normalizedSummary,
+        normalizedSnippet,
+        allowContains: normalizedSummary.length >= 32
+      },
+      getQueryConfig(neo4j.routing.READ)
+    );
+    const existingId = duplicateResult.records[0]?.get("id");
+    if (typeof existingId === "string") {
+      return {
+        writeMode: "neo4j",
+        saved: false,
+        duplicate: true,
+        existingId
+      };
+    }
+
     await graphDriver.executeQuery(
       `
       MERGE (c:Client {id: $clientId})
@@ -539,6 +857,203 @@ function approvedMemoryType(category: ExtractedMemory["category"]) {
   if (category === "Goal/Objective") return { label: "Objective", relationship: "HAS_OBJECTIVE" };
   if (category === "Promise/Commitment") return { label: "Promise", relationship: "HAS_PROMISE" };
   return null;
+}
+
+const liveMemoryCategories: MemoryCategory[] = [
+  "Life Event",
+  "Emotional Cue",
+  "Unresolved Concern",
+  "Goal/Objective",
+  "Promise/Commitment",
+  "Relationship Mention",
+  "Referral Opportunity",
+  "Follow-Up Action"
+];
+
+function liveSearchTerms(query: string) {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 2)
+    .filter(
+      (term) =>
+        ![
+          "the",
+          "and",
+          "for",
+          "with",
+          "about",
+          "client",
+          "advisor",
+          "meeting",
+          "that",
+          "this",
+          "from",
+          "what",
+          "when",
+          "where",
+          "who"
+        ].includes(term)
+    )
+    .slice(0, 8);
+}
+
+function searchDemoContext(context: ClientContext, terms: string[], limit: number) {
+  const includesTerm = (value: string) =>
+    terms.length === 0 || terms.some((term) => value.toLowerCase().includes(term));
+
+  return [
+    ...context.memories
+      .filter((memory) =>
+        includesTerm(`${memory.title} ${memory.summary} ${memory.category} ${memory.sourceSnippet}`)
+      )
+      .map((memory) => ({
+        id: memory.id,
+        type: "memory" as const,
+        title: memory.title,
+        summary: memory.summary,
+        source: memory.source,
+        category: memory.category,
+        status: memory.status,
+        snippet: memory.sourceSnippet,
+        confidence: memory.confidence
+      })),
+    ...context.actions
+      .filter((action) =>
+        includesTerm(`${action.title} ${action.actionType} ${action.status} ${action.draftText ?? ""}`)
+      )
+      .map((action) => ({
+        id: action.id,
+        type: "action" as const,
+        title: action.title,
+        summary: action.draftText ?? action.actionType,
+        source: action.meetingId,
+        status: action.status,
+        snippet: action.draftText
+      })),
+    ...context.graph.nodes
+      .filter((node) => includesTerm(`${node.label} ${node.type} ${node.note}`))
+      .map((node) => ({
+        id: node.id,
+        type: "graph" as const,
+        title: node.label,
+        summary: node.note,
+        source: "Demo graph",
+        edgeLabel: context.graph.edges.find((edge) => edge.source === node.id || edge.target === node.id)?.label
+      }))
+  ].slice(0, limit);
+}
+
+function recommendDemoPartners(
+  context: ClientContext,
+  terms: string[],
+  need: string,
+  limit: number
+): LivePartnerRecommendation[] {
+  const includesTerm = (value: string) =>
+    terms.length === 0 || terms.some((term) => value.toLowerCase().includes(term));
+  const hasOpenReferral = context.memories.some(
+    (memory) =>
+      memory.category === "Referral Opportunity" &&
+      (terms.length === 0 || includesTerm(`${memory.title} ${memory.summary} ${memory.sourceSnippet}`))
+  );
+
+  return partnerProfiles
+    .filter((partner) =>
+      hasOpenReferral && (partner.partnerType === "estate_planner" || partner.partnerType === "lawyer")
+        ? true
+        : includesTerm(`${partner.name} ${partner.partnerType} ${partner.specialty} ${partner.note} ${partner.keywords.join(" ")}`)
+    )
+    .map((partner) => ({
+      id: partner.id,
+      name: partner.name,
+      partnerType: partner.partnerType,
+      specialty: partner.specialty,
+      organization: partner.organization,
+      matchReason: hasOpenReferral
+        ? "Matched to an open referral opportunity in the demo client memory."
+        : `Matched the live need to ${partner.specialty.toLowerCase()}.`,
+      advisorUse:
+        partner.introStatus === "trusted"
+          ? "Confirm the client still wants an introduction, then offer a warm intro."
+          : "Use as advisor context first; confirm fit before offering an intro.",
+      source: hasOpenReferral ? "Demo referral graph" : "Demo partner directory",
+      confidence: hasOpenReferral ? 0.9 : 0.72,
+      status: partner.introStatus,
+      relationshipLabel: hasOpenReferral ? "matches" : "advisor partner",
+      evidence: need
+    }))
+    .sort((left, right) => right.confidence - left.confidence)
+    .slice(0, limit);
+}
+
+function partnerRecommendationFromRecord(values: Record<string, unknown>): LivePartnerRecommendation {
+  const source = stringValue(values.source, "Neo4j partner directory");
+  const evidence = stringValue(values.evidence);
+  const note = stringValue(values.note);
+  const specialty = stringValue(values.specialty, "Specialist");
+  const status = stringValue(values.status, "available");
+
+  return {
+    id: stringValue(values.id, `partner-${crypto.randomUUID()}`),
+    name: stringValue(values.name, "Partner"),
+    partnerType: partnerTypeValue(values.partnerType),
+    specialty,
+    organization: stringValue(values.organization) || undefined,
+    matchReason: evidence
+      ? `Matched this conversation to ${evidence}.`
+      : `Matched this conversation to ${specialty.toLowerCase()}.`,
+    advisorUse:
+      source.includes("referral")
+        ? "Confirm the client still wants this support, then offer the warm introduction."
+        : "Use as advisor context first; confirm the need before offering an introduction.",
+    source,
+    confidence: numberValue(values.confidence) ?? 0.7,
+    status,
+    relationshipLabel: stringValue(values.relationshipLabel) || undefined,
+    evidence: note || evidence || undefined
+  };
+}
+
+function liveResultType(value: unknown) {
+  return value === "action" || value === "graph" ? value : "memory";
+}
+
+function memoryCategoryValue(value: unknown) {
+  return liveMemoryCategories.includes(value as MemoryCategory) ? (value as MemoryCategory) : undefined;
+}
+
+function partnerTypeValue(value: unknown): PartnerType {
+  return value === "lawyer" ||
+    value === "doctor" ||
+    value === "tax_advisor" ||
+    value === "estate_planner" ||
+    value === "other"
+    ? value
+    : "other";
+}
+
+function stringValue(value: unknown, fallback = "") {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (value && typeof value === "object" && typeof (value as { toString?: unknown }).toString === "function") {
+    const text = String(value);
+    return text === "[object Object]" ? fallback : text;
+  }
+  return fallback;
+}
+
+function numberValue(value: unknown) {
+  if (typeof value === "number") return value;
+  if (value && typeof value === "object" && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+  return undefined;
+}
+
+function normalizeMemoryText(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function memoryNodeToItem(properties: Record<string, unknown>, clientId: string): MemoryItem {

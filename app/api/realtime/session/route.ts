@@ -143,16 +143,26 @@ function buildLiveCompanionTools() {
   return [
     {
       type: "function",
-      name: "fetch_client_context",
-      description: "Fetch current known client context, memories, actions, and relationship graph before asking a grounded follow-up.",
+      name: "search_client_memory",
+      description: "Search Neo4j for a small number of client-specific memories, actions, and relationship graph facts that are relevant to the current conversation.",
       parameters: {
         type: "object",
         additionalProperties: false,
-        required: ["focus"],
+        required: ["query", "reason"],
         properties: {
-          focus: {
+          query: {
             type: "string",
-            description: "The specific topic, person, concern, or goal you need context for."
+            description: "Focused search terms for the exact topic, person, goal, concern, action, or referral being discussed."
+          },
+          reason: {
+            type: "string",
+            description: "Why this lookup is useful for the advisor right now."
+          },
+          limit: {
+            type: "number",
+            minimum: 1,
+            maximum: 8,
+            description: "Maximum number of results to return. Prefer 3 to 5."
           }
         }
       }
@@ -160,7 +170,7 @@ function buildLiveCompanionTools() {
     {
       type: "function",
       name: "suggest_follow_up_question",
-      description: "Suggest one high-value question the advisor could ask right now. Use only when it would materially improve the meeting.",
+      description: "Suggest one high-value question the advisor could ask right now. Do not use for greetings, identity checks, call routing, generic confirmations, or before at least three substantive conversational turns.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -170,6 +180,42 @@ function buildLiveCompanionTools() {
           reason: { type: "string", minLength: 8, maxLength: 260 },
           source: { type: "string", minLength: 4, maxLength: 160 },
           priority: { type: "string", enum: ["high", "medium", "low"] }
+        }
+      }
+    },
+    {
+      type: "function",
+      name: "surface_relevant_partner",
+      description: "Surface advisor-network partners such as lawyers, doctors, tax advisors, or estate planners only when the live conversation contains a concrete specialist/referral need. Do not use for greetings, generic rapport, or vague context.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["need", "reason", "sourceSnippet"],
+        properties: {
+          need: {
+            type: "string",
+            minLength: 6,
+            maxLength: 220,
+            description: "Focused specialist need from the current conversation, for example estate lawyer, medical screening, or tax advisor."
+          },
+          reason: {
+            type: "string",
+            minLength: 8,
+            maxLength: 260,
+            description: "Why surfacing a partner would help the advisor right now."
+          },
+          sourceSnippet: {
+            type: "string",
+            minLength: 4,
+            maxLength: 320,
+            description: "Short quote or close paraphrase from the live conversation that triggered the partner lookup."
+          },
+          limit: {
+            type: "number",
+            minimum: 1,
+            maximum: 5,
+            description: "Maximum partners to return. Prefer 2 to 3."
+          }
         }
       }
     },
@@ -198,11 +244,7 @@ function buildLiveCompanionTools() {
           summary: { type: "string", minLength: 8, maxLength: 280 },
           sourceSnippet: { type: "string", minLength: 4, maxLength: 320 },
           confidence: { type: "number", minimum: 0, maximum: 1 },
-          proposedGraphMutation: { type: "string", maxLength: 500 },
-          save: {
-            type: "boolean",
-            description: "Set true when the memory is useful enough to save immediately."
-          }
+          proposedGraphMutation: { type: "string", maxLength: 500 }
         }
       }
     }

@@ -79,6 +79,43 @@ export type GraphEdge = {
   label: string;
 };
 
+export type PartnerType = "lawyer" | "doctor" | "tax_advisor" | "estate_planner" | "other";
+
+export type PartnerProfile = {
+  id: string;
+  name: string;
+  partnerType: PartnerType;
+  specialty: string;
+  organization?: string;
+  note: string;
+  keywords: string[];
+  introStatus: "trusted" | "available" | "unknown";
+};
+
+export type LivePartnerRecommendation = {
+  id: string;
+  name: string;
+  partnerType: PartnerType;
+  specialty: string;
+  organization?: string;
+  matchReason: string;
+  advisorUse: string;
+  source: string;
+  confidence: number;
+  status?: string;
+  relationshipLabel?: string;
+  evidence?: string;
+};
+
+export type LivePartnerRecommendationResponse = {
+  clientId: string;
+  need: string;
+  reason?: string;
+  source: "neo4j" | "demo";
+  results: LivePartnerRecommendation[];
+  warning?: string;
+};
+
 export type MemoryDisplayMode =
   | "brief"
   | "cards"
@@ -119,6 +156,36 @@ export type MemoryQueryVisualResponse = {
   actions?: SuggestedAction[];
   missingInfo?: { title: string; reason: string; suggestedNextStep: string };
   warning?: string;
+};
+
+export type LiveMemorySearchResult = {
+  id: string;
+  type: "memory" | "action" | "graph";
+  title: string;
+  summary: string;
+  source: string;
+  category?: MemoryCategory;
+  status?: string;
+  snippet?: string;
+  confidence?: number;
+  edgeLabel?: string;
+};
+
+export type LiveMemorySearchResponse = {
+  clientId: string;
+  query: string;
+  reason?: string;
+  source: "neo4j" | "demo";
+  results: LiveMemorySearchResult[];
+  warning?: string;
+};
+
+export type SaveMemoryResult = {
+  writeMode: "neo4j" | "demo";
+  saved: boolean;
+  duplicate?: boolean;
+  existingId?: string;
+  reason?: string;
 };
 
 export type ClientContext = {
