@@ -64,7 +64,7 @@ export default async function DashboardPage() {
                   href={`/qna/${context.upcomingMeeting.id}`}
                   icon={<MessageSquareText className="h-4 w-4" />}
                 >
-                  Open L1.5 Q&A
+                  Open Q&A
                 </SecondaryButton>
                 <SecondaryButton
                   href={`/meeting/${context.upcomingMeeting.id}`}
