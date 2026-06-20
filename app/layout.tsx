@@ -3,7 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Advisors' Advisor",
-  description: "AI memory and meeting companion for financial advisors"
+  description: "AI memory and meeting companion for financial advisors",
+  icons: {
+    icon: "/favicon.svg"
+  }
 };
 
 export default function RootLayout({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Mic, PlugZap, Send, Square } from "lucide-react";
 import type { ClientContext } from "@/lib/types";
 import { Badge, EmptyState, Panel } from "./ui";
@@ -11,7 +11,7 @@ type Message = {
   text: string;
 };
 
-type RealtimeStatus = "idle" | "connecting" | "connected" | "speaking" | "error";
+type RealtimeStatus = "idle" | "connecting" | "connected" | "speaking" | "demo" | "error";
 
 type TokenResponse = {
   mode?: string;
@@ -43,6 +43,20 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
 
   const transcript = useMemo(() => messages.map((message) => message.text).join(" "), [messages]);
   const connected = status === "connected" || status === "speaking";
+  const demoMode = status === "demo";
+  const canAsk = connected || demoMode;
+
+  useEffect(() => {
+    return () => {
+      channelRef.current?.close();
+      peerRef.current?.close();
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (audioRef.current) {
+        audioRef.current.srcObject = null;
+        audioRef.current.remove();
+      }
+    };
+  }, []);
 
   async function startRealtimeBriefing() {
     if (status === "connecting" || connected) return;
@@ -63,6 +77,16 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
 
       const token = (await tokenResponse.json()) as TokenResponse;
       const ephemeralKey = token.value ?? token.client_secret?.value;
+      if (token.mode === "demo" && !ephemeralKey) {
+        setStatus("demo");
+        setStatusText("Demo Q&A is active because OPENAI_API_KEY is not configured.");
+        appendMessage({
+          id: `system-demo-${Date.now()}`,
+          role: "system",
+          text: "Realtime voice is unavailable in this environment, but typed Q&A remains grounded in the same client memory graph."
+        });
+        return;
+      }
       if (!tokenResponse.ok || !ephemeralKey) {
         throw new Error(token.detail ?? token.error ?? token.message ?? "Unable to create Realtime token.");
       }
@@ -148,9 +172,19 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
 
   function submitTypedQuestion(question: string) {
     const clean = question.trim();
-    if (!clean || !connected) return;
+    if (!clean || !canAsk) return;
 
     appendMessage({ id: `advisor-${Date.now()}`, role: "advisor", text: clean });
+    if (demoMode) {
+      appendMessage({
+        id: `assistant-demo-${Date.now()}`,
+        role: "assistant",
+        text: answerDemoQuestion(clean, context)
+      });
+      setDraft("");
+      return;
+    }
+
     sendRealtimeEvent({
       type: "conversation.item.create",
       item: {
@@ -264,7 +298,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
     <Panel
       title="Pre-Meeting Voice Briefing"
       eyebrow="OpenAI Realtime"
-      action={<Badge tone={status === "error" ? "rose" : connected ? "signal" : "neutral"}>{status}</Badge>}
+      action={<Badge tone={status === "error" ? "rose" : connected || demoMode ? "signal" : "neutral"}>{status}</Badge>}
     >
       <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
         <div className="space-y-3">
@@ -327,13 +361,13 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
             <input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              disabled={!connected}
-              placeholder={connected ? "Optional typed test: Who should I introduce Mr. Tan to?" : "Start Realtime to ask"}
+              disabled={!canAsk}
+              placeholder={canAsk ? "Optional typed test: Who should I introduce Mr. Tan to?" : "Start Realtime to ask"}
               className="focus-ring min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2.5 text-sm text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
             />
             <button
               type="submit"
-              disabled={!connected || !draft.trim()}
+              disabled={!canAsk || !draft.trim()}
               className="focus-ring inline-flex items-center gap-2 rounded-md bg-signal px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-signal/80 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send className="h-4 w-4" />
@@ -350,7 +384,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
                 key={question}
                 type="button"
                 onClick={() => submitTypedQuestion(question)}
-                disabled={!connected}
+                disabled={!canAsk}
                 className="focus-ring w-full rounded-md border border-line bg-panel px-3 py-2 text-left text-sm leading-5 text-ink transition hover:border-signal/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {question}
@@ -399,4 +433,43 @@ function buildRealtimeInstructions(context: ClientContext) {
       2
     )
   ].join("\n");
+}
+
+function answerDemoQuestion(question: string, context: ClientContext) {
+  const normalized = question.toLowerCase();
+  const openItems = context.memories.filter((memory) => memory.status === "open");
+
+  if (normalized.includes("introduce") || normalized.includes("who") || normalized.includes("referral")) {
+    return [
+      "Best grounded options:",
+      "Evelyn Ng for estate planning because Mr. Tan's will update is unresolved.",
+      "Marcus Lee if he specifically wants a lawyer.",
+      "Mr. Ong is only a watchlist lead; ask Mr. Tan for permission before any outreach."
+    ].join("\n");
+  }
+
+  if (normalized.includes("last") || normalized.includes("discuss")) {
+    return [
+      `Last meeting was ${context.lastMeeting.startsAt.slice(0, 10)}.`,
+      "They discussed estate planning, an unresolved will update, policy renewal hesitation, and Sarah promised to send an estate planning guide."
+    ].join(" ");
+  }
+
+  if (normalized.includes("open") || normalized.includes("concern") || normalized.includes("remember")) {
+    return openItems
+      .map((memory) => `${memory.category}: ${memory.summary}`)
+      .join("\n");
+  }
+
+  if (normalized.includes("start") || normalized.includes("open with") || normalized.includes("opener")) {
+    return "Open by congratulating Mr. Tan on Jia En getting into NUS, then bridge into whether that milestone changes his family transition timeline.";
+  }
+
+  if (normalized.includes("follow") || normalized.includes("action")) {
+    return context.actions
+      .map((action) => `${action.title} - due ${action.dueAt}`)
+      .join("\n");
+  }
+
+  return "The memory graph does not contain a specific answer to that. Known context covers Jia En's NUS milestone, will planning, policy renewal hesitation, estate planning follow-ups, Evelyn Ng, Marcus Lee, and Mr. Ong.";
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMeeting } from "@/lib/demo-data";
+import { appendMeetingEvents, getStoredMeetingSignals } from "@/lib/meeting-store";
 import type { TranscriptEvent } from "@/lib/types";
 
 export async function POST(
@@ -14,10 +15,17 @@ export async function POST(
   }
 
   const body = (await request.json()) as { events?: TranscriptEvent[] };
+  const events = appendMeetingEvents(meetingId, body.events ?? []);
+  const signals = getStoredMeetingSignals(meetingId, {
+    clientId: meeting.clientId
+  });
 
   return NextResponse.json({
     meetingId,
     accepted: body.events?.length ?? 0,
-    mode: "demo-memory"
+    totalEvents: events.length,
+    mode: "meeting-session-memory",
+    suggestions: signals.suggestions,
+    extracted: signals.extracted
   });
 }

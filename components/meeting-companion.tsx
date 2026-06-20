@@ -11,6 +11,8 @@ import { SuggestionFeed } from "./suggestion-feed";
 const demoStatements = [
   "Jia En is excited about NUS, but it made me think more seriously about family planning.",
   "I still have not updated my will. I know it matters, but I am not sure where to begin.",
+  "My friend Mr. Ong runs a family business and might need succession planning advice later.",
+  "I am still unsure whether renewing the policy now is the right move.",
   "If you know a good lawyer or estate planning person, I would appreciate an introduction.",
   "Please send me the estate planning guide after this meeting."
 ];
@@ -19,7 +21,14 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
   const [events, setEvents] = useState<TranscriptEvent[]>([]);
   const [draft, setDraft] = useState("");
 
-  const signals = useMemo(() => extractMeetingSignals(events), [events]);
+  const signals = useMemo(
+    () =>
+      extractMeetingSignals(events, {
+        clientId: context.client.id,
+        meetingId: context.upcomingMeeting.id
+      }),
+    [context.client.id, context.upcomingMeeting.id, events]
+  );
   const suggestions: SilentSuggestion[] = signals.suggestions;
   const extracted: ExtractedMemory[] = signals.extracted;
   const recorder = useLiveMeetingRecorder({
@@ -35,15 +44,23 @@ export function MeetingCompanion({ context }: { context: ClientContext }) {
   function addEvent(text: string, speaker: TranscriptEvent["speaker"] = "client") {
     const clean = text.trim();
     if (!clean) return;
+    const nextEvent = {
+      id: `event-${Date.now()}-${events.length + 1}`,
+      speaker,
+      text: clean,
+      timestamp: new Date().toISOString()
+    };
     setEvents((current) => [
       ...current,
-      {
-        id: `event-${current.length + 1}`,
-        speaker,
-        text: clean,
-        timestamp: new Date().toISOString()
-      }
+      nextEvent
     ]);
+    void fetch(`/api/meetings/${context.upcomingMeeting.id}/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ events: [nextEvent] })
+    });
     setDraft("");
   }
 

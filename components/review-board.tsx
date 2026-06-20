@@ -1,10 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Pencil, X } from "lucide-react";
-import { actions, extractMeetingSignals } from "@/lib/demo-data";
+import { Check, RotateCcw, X } from "lucide-react";
+import { extractMeetingSignals } from "@/lib/demo-data";
 import type { ActionItem, ClientContext, ExtractedMemory, TranscriptEvent } from "@/lib/types";
 import { Badge, EmptyState, Panel } from "./ui";
+
+type ReviewAction = ActionItem & {
+  writeStatus?: string;
+};
+
+type ReviewMemory = ExtractedMemory & {
+  reviewStatus: "pending" | "approved" | "ignored";
+  writeStatus?: string;
+};
 
 const reviewTranscript: TranscriptEvent[] = [
   {
@@ -21,33 +30,145 @@ const reviewTranscript: TranscriptEvent[] = [
   },
   {
     id: "review-3",
+    speaker: "client",
+    text: "My friend Mr. Ong runs a family business and might need succession planning advice later.",
+    timestamp: new Date().toISOString()
+  },
+  {
+    id: "review-4",
     speaker: "advisor",
     text: "I will send the estate planning guide and draft an introduction to Evelyn Ng.",
     timestamp: new Date().toISOString()
   }
 ];
 
-export function ReviewBoard({ context }: { context: ClientContext }) {
-  const generated = useMemo(() => extractMeetingSignals(reviewTranscript).extracted, []);
-  const [actionState, setActionState] = useState<ActionItem[]>(actions);
-  const [memoryState, setMemoryState] = useState<ExtractedMemory[]>(generated);
+export function ReviewBoard({
+  context,
+  meetingEvents = []
+}: {
+  context: ClientContext;
+  meetingEvents?: TranscriptEvent[];
+}) {
+  const sourceTranscript = meetingEvents.length > 0 ? meetingEvents : reviewTranscript;
+  const generated = useMemo(
+    () =>
+      extractMeetingSignals(sourceTranscript, {
+        clientId: context.client.id,
+        meetingId: context.upcomingMeeting.id
+      }).extracted,
+    [context.client.id, context.upcomingMeeting.id, sourceTranscript]
+  );
+  const [actionState, setActionState] = useState<ReviewAction[]>(context.actions);
+  const [memoryState, setMemoryState] = useState<ReviewMemory[]>(
+    generated.map((memory) => ({ ...memory, reviewStatus: "pending" }))
+  );
   const approvedActions = actionState.filter((action) => action.status === "approved").length;
-  const approvedMemories = memoryState.filter((memory) => memory.id.startsWith("approved-")).length;
+  const approvedMemories = memoryState.filter((memory) => memory.reviewStatus === "approved").length;
 
-  function markAction(id: string, status: ActionItem["status"]) {
+  async function markAction(id: string, status: ActionItem["status"]) {
     setActionState((current) =>
       current.map((action) => (action.id === id ? { ...action, status } : action))
     );
+
+    if (status !== "approved") return;
+
+    const action = actionState.find((item) => item.id === id);
+    if (!action) return;
+
+    try {
+      const response = await fetch("/api/actions/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ action: { ...action, status } })
+      });
+      const result = (await response.json()) as {
+        sendMode?: string;
+        writeMode?: string;
+        saved?: boolean;
+        reason?: string;
+        error?: string;
+      };
+      setActionState((current) =>
+        current.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                writeStatus: response.ok
+                  ? result.saved
+                    ? `saved to ${result.writeMode ?? "memory"}; ${result.sendMode ?? "advisor approval required"}`
+                    : `${result.sendMode ?? "advisor approval required"}; ${result.reason ?? "queued in demo mode"}`
+                  : result.error ?? "Approval failed"
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      setActionState((current) =>
+        current.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                writeStatus: error instanceof Error ? error.message : "Approval failed"
+              }
+            : item
+        )
+      );
+    }
   }
 
-  function approveMemory(id: string) {
+  async function approveMemory(memory: ReviewMemory) {
     setMemoryState((current) =>
-      current.map((memory) => (memory.id === id ? { ...memory, id: `approved-${memory.id}` } : memory))
+      current.map((item) => (item.id === memory.id ? { ...item, reviewStatus: "approved" } : item))
     );
+
+    try {
+      const response = await fetch("/api/memory/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ memory })
+      });
+      const result = (await response.json()) as {
+        writeMode?: string;
+        saved?: boolean;
+        reason?: string;
+        error?: string;
+      };
+      setMemoryState((current) =>
+        current.map((item) =>
+          item.id === memory.id
+            ? {
+                ...item,
+                writeStatus: response.ok
+                  ? result.saved
+                    ? `saved to ${result.writeMode ?? "memory"}`
+                    : result.reason ?? "queued in demo mode"
+                  : result.error ?? "Approval failed"
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      setMemoryState((current) =>
+        current.map((item) =>
+          item.id === memory.id
+            ? {
+                ...item,
+                writeStatus: error instanceof Error ? error.message : "Approval failed"
+              }
+            : item
+        )
+      );
+    }
   }
 
   function ignoreMemory(id: string) {
-    setMemoryState((current) => current.filter((memory) => memory.id !== id));
+    setMemoryState((current) =>
+      current.map((memory) => (memory.id === id ? { ...memory, reviewStatus: "ignored" } : memory))
+    );
   }
 
   return (
@@ -95,7 +216,7 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => markAction(action.id, "approved")}
+                    onClick={() => void markAction(action.id, "approved")}
                     className="focus-ring rounded-md border border-signal/40 bg-signal/10 p-2 text-ink transition hover:bg-signal/20"
                     aria-label={`Approve ${action.title}`}
                   >
@@ -103,15 +224,15 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => markAction(action.id, "pending")}
+                    onClick={() => void markAction(action.id, "pending")}
                     className="focus-ring rounded-md border border-line bg-panel p-2 text-ink transition hover:border-cobalt/40"
-                    aria-label={`Edit ${action.title}`}
+                    aria-label={`Reset ${action.title}`}
                   >
-                    <Pencil className="h-4 w-4" />
+                    <RotateCcw className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => markAction(action.id, "ignored")}
+                    onClick={() => void markAction(action.id, "ignored")}
                     className="focus-ring rounded-md border border-rose/30 bg-rose/10 p-2 text-ink transition hover:bg-rose/20"
                     aria-label={`Ignore ${action.title}`}
                   >
@@ -124,6 +245,9 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
                   {action.draftText}
                 </p>
               ) : null}
+              {action.writeStatus ? (
+                <p className="mt-2 text-xs font-semibold text-muted">{action.writeStatus}</p>
+              ) : null}
             </article>
           ))}
         </div>
@@ -135,11 +259,14 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
         ) : (
           <div className="grid gap-3 lg:grid-cols-3">
             {memoryState.map((memory) => {
-              const approved = memory.id.startsWith("approved-");
+              const approved = memory.reviewStatus === "approved";
+              const ignored = memory.reviewStatus === "ignored";
               return (
                 <article key={memory.id} className="rounded-lg border border-line bg-paper p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={approved ? "signal" : "neutral"}>{approved ? "approved" : memory.category}</Badge>
+                    <Badge tone={approved ? "signal" : ignored ? "rose" : "neutral"}>
+                      {approved || ignored ? memory.reviewStatus : memory.category}
+                    </Badge>
                     <span className="text-xs font-medium text-muted">
                       {Math.round(memory.confidence * 100)}% confidence
                     </span>
@@ -149,7 +276,8 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
                   <div className="mt-3 flex gap-2">
                     <button
                       type="button"
-                      onClick={() => approveMemory(memory.id)}
+                      onClick={() => void approveMemory(memory)}
+                      disabled={approved || ignored}
                       className="focus-ring inline-flex items-center gap-2 rounded-md bg-signal px-3 py-2 text-sm font-semibold text-ink transition hover:bg-signal/80"
                     >
                       <Check className="h-4 w-4" />
@@ -158,12 +286,16 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
                     <button
                       type="button"
                       onClick={() => ignoreMemory(memory.id)}
+                      disabled={approved || ignored}
                       className="focus-ring inline-flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-sm font-semibold text-ink transition hover:border-rose/40"
                     >
                       <X className="h-4 w-4" />
                       Ignore
                     </button>
                   </div>
+                  {memory.writeStatus ? (
+                    <p className="mt-2 text-xs font-semibold text-muted">{memory.writeStatus}</p>
+                  ) : null}
                 </article>
               );
             })}

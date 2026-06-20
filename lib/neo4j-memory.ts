@@ -69,6 +69,9 @@ export async function getClientContextWithMemoryLayer(clientId: string): Promise
         UNION
         MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]->(:ReferralOpportunity)-[:MATCHES_SPECIALIST|INVOLVES]->(node)
         RETURN node
+        UNION
+        MATCH (:Client {id: $clientId})-[:RELATED_TO]->(:Person)-[:MENTIONED_OPPORTUNITY]->(node)
+        RETURN node
         `,
         { clientId },
         getQueryConfig(neo4j.routing.READ)
@@ -82,6 +85,9 @@ export async function getClientContextWithMemoryLayer(clientId: string): Promise
         RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
         UNION
         MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]->(source:ReferralOpportunity)-[r:MATCHES_SPECIALIST|INVOLVES]->(target)
+        RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+        UNION
+        MATCH (:Client {id: $clientId})-[:RELATED_TO]->(source:Person)-[r:MENTIONED_OPPORTUNITY]->(target:ReferralOpportunity)
         RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
         `,
         { clientId },
@@ -221,6 +227,8 @@ export async function saveApprovedMemory(memory: ExtractedMemory) {
       },
       getQueryConfig(neo4j.routing.WRITE)
     );
+    await saveTypedApprovedMemory(graphDriver, memory);
+    await linkMeetingToApprovedMemory(graphDriver, memory);
 
     return {
       writeMode: "neo4j",
@@ -233,6 +241,272 @@ export async function saveApprovedMemory(memory: ExtractedMemory) {
       reason: error instanceof Error ? error.message : "Neo4j unavailable."
     };
   }
+}
+
+export async function saveApprovedAction(action: ActionItem) {
+  const graphDriver = getDriver();
+  if (!graphDriver) {
+    return {
+      writeMode: "demo",
+      saved: false,
+      reason: "NEO4J_URI, NEO4J_USERNAME, or NEO4J_PASSWORD is not configured."
+    };
+  }
+
+  try {
+    await graphDriver.executeQuery(
+      `
+      MERGE (c:Client {id: $clientId})
+      MERGE (a:Action {id: $id})
+      SET a.title = $title,
+          a.actionType = $actionType,
+          a.dueAt = $dueAt,
+          a.owner = $owner,
+          a.status = $status,
+          a.draftText = $draftText,
+          a.meetingId = $meetingId,
+          a.updatedAt = datetime(),
+          a.createdAt = coalesce(a.createdAt, datetime())
+      MERGE (c)-[:HAS_ACTION]->(a)
+      `,
+      {
+        clientId: action.clientId,
+        id: action.id,
+        title: action.title,
+        actionType: action.actionType,
+        dueAt: action.dueAt,
+        owner: action.owner,
+        status: action.status,
+        draftText: action.draftText ?? "",
+        meetingId: action.meetingId
+      },
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+
+    if (action.meetingId) {
+      await graphDriver.executeQuery(
+        `
+        MATCH (a:Action {id: $actionId})
+        MERGE (m:Meeting {id: $meetingId})
+        MERGE (a)-[:FOLLOWS_FROM]->(m)
+        `,
+        {
+          actionId: action.id,
+          meetingId: action.meetingId
+        },
+        getQueryConfig(neo4j.routing.WRITE)
+      );
+    }
+
+    return {
+      writeMode: "neo4j",
+      saved: true
+    };
+  } catch (error) {
+    return {
+      writeMode: "demo",
+      saved: false,
+      reason: error instanceof Error ? error.message : "Neo4j unavailable."
+    };
+  }
+}
+
+async function saveTypedApprovedMemory(graphDriver: Driver, memory: ExtractedMemory) {
+  const common = {
+    clientId: memory.clientId,
+    memoryId: memory.id,
+    typedId: typedNodeId(memory),
+    title: titleFromMemory(memory),
+    summary: memory.summary,
+    sourceSnippet: memory.sourceSnippet,
+    confidence: memory.confidence,
+    timestamp: memory.timestamp
+  };
+
+  if (memory.category === "Life Event") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:LifeEvent {id: $typedId})
+      SET typed.title = $title,
+          typed.summary = $summary,
+          typed.sourceSnippet = $sourceSnippet,
+          typed.confidence = $confidence,
+          typed.lastConfirmedAt = $timestamp,
+          typed.updatedAt = datetime()
+      MERGE (c)-[:HAS_LIFE_EVENT]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+    return;
+  }
+
+  if (memory.category === "Unresolved Concern" || memory.category === "Emotional Cue") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:Concern {id: $typedId})
+      SET typed.title = $title,
+          typed.summary = $summary,
+          typed.status = 'open',
+          typed.sourceSnippet = $sourceSnippet,
+          typed.confidence = $confidence,
+          typed.updatedAt = datetime()
+      MERGE (c)-[:HAS_CONCERN]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+    return;
+  }
+
+  if (memory.category === "Goal/Objective") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:Objective {id: $typedId})
+      SET typed.title = $title,
+          typed.summary = $summary,
+          typed.status = 'active',
+          typed.sourceSnippet = $sourceSnippet,
+          typed.confidence = $confidence,
+          typed.updatedAt = datetime()
+      MERGE (c)-[:HAS_OBJECTIVE]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+    return;
+  }
+
+  if (memory.category === "Promise/Commitment") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:Promise {id: $typedId})
+      SET typed.title = $title,
+          typed.summary = $summary,
+          typed.status = 'open',
+          typed.sourceSnippet = $sourceSnippet,
+          typed.confidence = $confidence,
+          typed.updatedAt = datetime()
+      MERGE (c)-[:HAS_PROMISE]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+    return;
+  }
+
+  if (memory.category === "Relationship Mention") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:Person {id: $typedId})
+      SET typed.name = $title,
+          typed.label = $title,
+          typed.note = $summary,
+          typed.sourceSnippet = $sourceSnippet,
+          typed.confidence = $confidence,
+          typed.updatedAt = datetime()
+      MERGE (c)-[rel:RELATED_TO {relationship: 'mentioned'}]->(typed)
+      SET rel.label = 'mentioned',
+          rel.id = $memoryId + '-relationship'
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+    return;
+  }
+
+  if (memory.category === "Referral Opportunity") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:ReferralOpportunity {id: $typedId})
+      SET typed.title = $title,
+          typed.label = $title,
+          typed.need = $summary,
+          typed.reason = $sourceSnippet,
+          typed.status = 'pending_advisor_approval',
+          typed.confidence = $confidence,
+          typed.updatedAt = datetime()
+      MERGE (c)-[rel:HAS_REFERRAL_OPPORTUNITY]->(typed)
+      SET rel.label = 'has opportunity',
+          rel.id = $memoryId + '-referral'
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+    return;
+  }
+
+  if (memory.category === "Follow-Up Action") {
+    await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      MATCH (mem:Memory {id: $memoryId})
+      MERGE (typed:Action {id: $typedId})
+      SET typed.title = $title,
+          typed.actionType = 'follow_up',
+          typed.status = 'pending',
+          typed.draftText = $summary,
+          typed.sourceSnippet = $sourceSnippet,
+          typed.confidence = $confidence,
+          typed.updatedAt = datetime()
+      MERGE (c)-[:HAS_ACTION]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `,
+      common,
+      getQueryConfig(neo4j.routing.WRITE)
+    );
+  }
+}
+
+async function linkMeetingToApprovedMemory(graphDriver: Driver, memory: ExtractedMemory) {
+  if (!memory.meetingId) return;
+
+  await graphDriver.executeQuery(
+    `
+    MATCH (mem:Memory {id: $memoryId})
+    MERGE (meeting:Meeting {id: $meetingId})
+    MERGE (meeting)-[:PRODUCED]->(mem)
+    `,
+    {
+      memoryId: memory.id,
+      meetingId: memory.meetingId
+    },
+    getQueryConfig(neo4j.routing.WRITE)
+  );
+}
+
+function typedNodeId(memory: ExtractedMemory) {
+  if (memory.id === "extract-referral") return "referral-estate";
+  if (memory.id === "extract-business-referral") return "referral-business-succession";
+  if (memory.id === "extract-ong") return "person-ong";
+  return `${memory.id}-typed`;
+}
+
+function titleFromMemory(memory: ExtractedMemory) {
+  if (memory.id === "extract-ong") return "Mr. Ong";
+  if (memory.id === "extract-referral") return "Estate Planning Intro";
+  if (memory.id === "extract-business-referral") return "Business Succession Lead";
+
+  const [firstSentence] = memory.summary.split(".");
+  return firstSentence.length > 80 ? `${firstSentence.slice(0, 77)}...` : firstSentence;
 }
 
 function memoryNodeToItem(properties: Record<string, unknown>, clientId: string): MemoryItem {

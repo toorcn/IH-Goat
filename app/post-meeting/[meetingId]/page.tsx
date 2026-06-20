@@ -3,6 +3,7 @@ import { RelationshipGraph } from "@/components/relationship-graph";
 import { ReviewBoard } from "@/components/review-board";
 import { AppShell, MetricCard, PrimaryButton, SectionHeader } from "@/components/ui";
 import { getMeeting } from "@/lib/demo-data";
+import { getMeetingEvents } from "@/lib/meeting-store";
 import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function PostMeetingPage({
   if (!meeting) notFound();
 
   const context = await getClientContextWithMemoryLayer(meeting.clientId);
+  const meetingEvents = getMeetingEvents(meeting.id);
 
   return (
     <AppShell>
@@ -33,7 +35,7 @@ export default async function PostMeetingPage({
         <MetricCard label="Evidence" value="Linked" detail="Review stays connected to the client graph." tone="cobalt" />
       </div>
 
-      <ReviewBoard context={context} />
+      <ReviewBoard context={context} meetingEvents={meetingEvents} />
 
       <SectionHeader
         eyebrow="Updated memory view"

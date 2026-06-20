@@ -16,15 +16,17 @@ import {
   StatusIcon
 } from "@/components/ui";
 import { ClientContextPanel } from "@/components/context-panel";
+import { DailyBriefPanel } from "@/components/daily-brief";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
-import { client } from "@/lib/demo-data";
+import { client, getDailyBrief } from "@/lib/demo-data";
 import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const context = await getClientContextWithMemoryLayer(client.id);
+  const dailyBrief = getDailyBrief();
   const meetingTime = new Intl.DateTimeFormat("en-SG", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -86,6 +88,8 @@ export default async function DashboardPage() {
           </dl>
         </Panel>
       </section>
+
+      <DailyBriefPanel brief={dailyBrief} />
 
       <section>
         <SectionHeader

@@ -7,6 +7,7 @@ import {
   meetings,
   memories
 } from "../lib/demo-data";
+import type { MemoryCategory } from "../lib/types";
 import { getNeo4jDatabaseConfig, loadLocalEnv } from "./load-local-env";
 
 loadLocalEnv();
@@ -91,6 +92,13 @@ async function main() {
         `,
         { memory }
       );
+      const typed = typedMemoryMutation(memory.category);
+      if (typed) {
+        await executeWrite(driver, typed.query, {
+          memory,
+          typedId: typedSeedNodeId(memory.id)
+        });
+      }
     }
 
     for (const action of actions) {
@@ -101,6 +109,7 @@ async function main() {
         MERGE (act:Action {id: $action.id})
         SET act.title = $action.title,
             act.actionType = $action.actionType,
+            act.meetingId = $action.meetingId,
             act.dueAt = $action.dueAt,
             act.owner = $action.owner,
             act.status = $action.status,
@@ -116,6 +125,8 @@ async function main() {
     const referral = seedNode("referral-estate");
     const evelyn = seedNode("specialist-evelyn");
     const marcus = seedNode("specialist-marcus");
+    const ong = seedNode("person-ong");
+    const businessReferral = seedNode("referral-business-succession");
 
     await executeWrite(
       driver,
@@ -148,6 +159,18 @@ async function main() {
           marcus.label = $marcus.label,
           marcus.role = 'lawyer',
           marcus.note = $marcus.note
+      MERGE (ong:Person {id: $ong.id})
+      SET ong.name = $ong.label,
+          ong.label = $ong.label,
+          ong.role = 'family business owner',
+          ong.note = $ong.note
+      MERGE (businessReferral:ReferralOpportunity {id: $businessReferral.id})
+      SET businessReferral.title = $businessReferral.label,
+          businessReferral.label = $businessReferral.label,
+          businessReferral.need = 'Business succession introduction',
+          businessReferral.reason = $businessReferral.note,
+          businessReferral.status = 'permission_needed',
+          businessReferral.note = $businessReferral.note
       MERGE (c)-[spouseRel:RELATED_TO {relationship: 'spouse'}]->(spouse)
       SET spouseRel.id = 'edge-spouse',
           spouseRel.label = 'spouse'
@@ -163,8 +186,18 @@ async function main() {
       MERGE (referral)-[marcusRel:MATCHES_SPECIALIST]->(marcus)
       SET marcusRel.id = 'edge-marcus',
           marcusRel.label = 'legal support'
+      MERGE (c)-[ongRel:RELATED_TO {relationship: 'friend'}]->(ong)
+      SET ongRel.id = 'edge-ong',
+          ongRel.label = 'friend'
+      MERGE (businessRel:ReferralOpportunity {id: $businessReferral.id})
+      MERGE (c)-[businessReferralRel:HAS_REFERRAL_OPPORTUNITY]->(businessRel)
+      SET businessReferralRel.id = 'edge-business-referral-client',
+          businessReferralRel.label = 'warm lead'
+      MERGE (ong)-[businessNeedRel:MENTIONED_OPPORTUNITY]->(businessRel)
+      SET businessNeedRel.id = 'edge-business-referral',
+          businessNeedRel.label = 'may need'
       `,
-      { clientId: client.id, spouse, daughter, referral, evelyn, marcus }
+      { clientId: client.id, spouse, daughter, referral, evelyn, marcus, ong, businessReferral }
     );
 
     console.log("Seeded Neo4j demo graph for Advisors' Advisor.");
@@ -193,6 +226,102 @@ function demoNodeIds() {
     ...actions.map((action) => action.id),
     ...graphNodes.map((node) => node.id)
   ];
+}
+
+function typedSeedNodeId(memoryId: string) {
+  if (memoryId === "memory-lawyer-request") return "referral-estate";
+  if (memoryId === "memory-ong-business-contact") return "person-ong";
+  return `${memoryId}-typed`;
+}
+
+function typedMemoryMutation(category: MemoryCategory) {
+  if (category === "Life Event") {
+    return {
+      query: `
+      MATCH (c:Client {id: $memory.clientId})
+      MATCH (mem:Memory {id: $memory.id})
+      MERGE (typed:LifeEvent {id: $typedId})
+      SET typed.title = $memory.title,
+          typed.summary = $memory.summary,
+          typed.sourceSnippet = $memory.sourceSnippet,
+          typed.confidence = $memory.confidence,
+          typed.lastConfirmedAt = $memory.lastConfirmedAt
+      MERGE (c)-[:HAS_LIFE_EVENT]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `
+    };
+  }
+
+  if (category === "Unresolved Concern" || category === "Emotional Cue") {
+    return {
+      query: `
+      MATCH (c:Client {id: $memory.clientId})
+      MATCH (mem:Memory {id: $memory.id})
+      MERGE (typed:Concern {id: $typedId})
+      SET typed.title = $memory.title,
+          typed.summary = $memory.summary,
+          typed.status = $memory.status,
+          typed.sourceSnippet = $memory.sourceSnippet,
+          typed.confidence = $memory.confidence
+      MERGE (c)-[:HAS_CONCERN]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `
+    };
+  }
+
+  if (category === "Goal/Objective") {
+    return {
+      query: `
+      MATCH (c:Client {id: $memory.clientId})
+      MATCH (mem:Memory {id: $memory.id})
+      MERGE (typed:Objective {id: $typedId})
+      SET typed.title = $memory.title,
+          typed.summary = $memory.summary,
+          typed.status = $memory.status,
+          typed.sourceSnippet = $memory.sourceSnippet,
+          typed.confidence = $memory.confidence
+      MERGE (c)-[:HAS_OBJECTIVE]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `
+    };
+  }
+
+  if (category === "Promise/Commitment") {
+    return {
+      query: `
+      MATCH (c:Client {id: $memory.clientId})
+      MATCH (mem:Memory {id: $memory.id})
+      MERGE (typed:Promise {id: $typedId})
+      SET typed.title = $memory.title,
+          typed.summary = $memory.summary,
+          typed.status = $memory.status,
+          typed.sourceSnippet = $memory.sourceSnippet,
+          typed.confidence = $memory.confidence
+      MERGE (c)-[:HAS_PROMISE]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `
+    };
+  }
+
+  if (category === "Referral Opportunity") {
+    return {
+      query: `
+      MATCH (c:Client {id: $memory.clientId})
+      MATCH (mem:Memory {id: $memory.id})
+      MERGE (typed:ReferralOpportunity {id: $typedId})
+      SET typed.title = $memory.title,
+          typed.label = $memory.title,
+          typed.need = $memory.summary,
+          typed.reason = $memory.sourceSnippet,
+          typed.status = $memory.status,
+          typed.confidence = $memory.confidence
+      MERGE (c)-[:HAS_REFERRAL_OPPORTUNITY]->(typed)
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `
+    };
+  }
+
+  return null;
 }
 
 function executeWrite(driver: Driver, query: string, parameters: Record<string, unknown>) {

@@ -104,10 +104,12 @@ export type TranscriptEvent = {
 export type ExtractedMemory = {
   id: string;
   clientId: string;
+  meetingId?: string;
   category: MemoryCategory;
   summary: string;
   sourceSnippet: string;
   timestamp: string;
+  sourceEventIds?: string[];
   confidence: number;
   proposedGraphMutation: string;
 };
@@ -118,4 +120,70 @@ export type SilentSuggestion = {
   reason: string;
   source: string;
   priority: "high" | "medium" | "low";
+};
+
+export type DailyBriefMeeting = {
+  id: string;
+  time: string;
+  clientName: string;
+  objective: string;
+  lastDiscussed: string;
+  opener: string;
+  href: string;
+};
+
+export type EndOfDayItem = {
+  id: string;
+  title: string;
+  detail: string;
+  target: "calendar" | "todo" | "memory" | "intro";
+  status: "ready" | "needs_review";
+};
+
+export type NetworkTouchpoint = {
+  id: string;
+  name: string;
+  role: string;
+  source: string;
+  lastContactedAt: string;
+  status: "new" | "warm" | "stale";
+  referralPotential: "high" | "medium" | "low";
+  note: string;
+};
+
+export type NetworkHealth = {
+  newContactsThisWeek: number;
+  threeMonthWeeklyAverage: number;
+  reactivatedContacts: number;
+  referralOpportunities: number;
+  healthScore: number;
+  topSignals: string[];
+  touchpoints: NetworkTouchpoint[];
+};
+
+export type MemoryLayerDecision = {
+  current: string;
+  alternatives: Array<{
+    name: string;
+    useWhen: string;
+    decision: "now" | "later" | "parked";
+  }>;
+};
+
+export type RoadmapItem = {
+  id: string;
+  stage: string;
+  title: string;
+  owner: "core" | "integration";
+  status: "built" | "next" | "later";
+};
+
+export type DailyBrief = {
+  date: string;
+  advisorName: string;
+  morning: DailyBriefMeeting[];
+  endOfDay: EndOfDayItem[];
+  networkHealth: NetworkHealth;
+  memoryLayer: MemoryLayerDecision;
+  roadmap: RoadmapItem[];
 };

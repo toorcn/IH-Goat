@@ -3,6 +3,7 @@ import type {
   Advisor,
   Client,
   ClientContext,
+  DailyBrief,
   ExtractedMemory,
   GraphEdge,
   GraphNode,
@@ -134,6 +135,22 @@ export const memories: MemoryItem[] = [
     validFrom: "2026-04-08",
     lastConfirmedAt: "2026-04-08",
     salience: 0.86
+  },
+  {
+    id: "memory-ong-business-contact",
+    clientId: client.id,
+    category: "Relationship Mention",
+    title: "Mr. Ong may need business succession help",
+    summary:
+      "Mr. Tan mentioned Mr. Ong, a friend who owns a family business and may need succession planning advice.",
+    source: "2026-04-08 meeting",
+    sourceSnippet:
+      "My friend Mr. Ong runs a family business and might need help thinking through succession.",
+    confidence: 0.81,
+    status: "open",
+    validFrom: "2026-04-08",
+    lastConfirmedAt: "2026-04-08",
+    salience: 0.78
   }
 ];
 
@@ -171,6 +188,18 @@ export const actions: ActionItem[] = [
     dueAt: "2026-07-04",
     owner: advisor.name,
     status: "pending"
+  },
+  {
+    id: "action-ong-network",
+    clientId: client.id,
+    meetingId: meetings[0].id,
+    title: "Log Mr. Ong as referral watchlist contact",
+    actionType: "network_health",
+    dueAt: "2026-06-21",
+    owner: advisor.name,
+    status: "pending",
+    draftText:
+      "Add Mr. Ong to Sarah's referral watchlist and revisit whether Mr. Tan is comfortable making a warm introduction."
   }
 ];
 
@@ -216,6 +245,18 @@ export const graphNodes: GraphNode[] = [
     label: "Estate Planning Intro",
     type: "ReferralOpportunity",
     note: "Warm introduction for will update"
+  },
+  {
+    id: "person-ong",
+    label: "Mr. Ong",
+    type: "Person",
+    note: "Friend with family business succession needs"
+  },
+  {
+    id: "referral-business-succession",
+    label: "Business Succession Lead",
+    type: "ReferralOpportunity",
+    note: "Potential referral from Mr. Tan's network"
   }
 ];
 
@@ -255,6 +296,18 @@ export const graphEdges: GraphEdge[] = [
     source: "referral-estate",
     target: "specialist-marcus",
     label: "legal support"
+  },
+  {
+    id: "edge-ong",
+    source: client.id,
+    target: "person-ong",
+    label: "friend"
+  },
+  {
+    id: "edge-business-referral",
+    source: "person-ong",
+    target: "referral-business-succession",
+    label: "may need"
   }
 ];
 
@@ -262,8 +315,136 @@ export const suggestedQuestions = [
   "How has Jia En's NUS news changed your planning priorities?",
   "What has made the will update hard to complete?",
   "Would a warm introduction to Evelyn Ng help you take the next step?",
+  "Is Mr. Ong someone you would be comfortable introducing for business succession help?",
   "What would make the policy renewal feel clearly worth it?"
 ];
+
+export const dailyBrief: DailyBrief = {
+  date: "2026-06-20",
+  advisorName: advisor.name,
+  morning: [
+    {
+      id: meetings[0].id,
+      time: "10:30 AM",
+      clientName: client.name,
+      objective: meetings[0].objective,
+      lastDiscussed:
+        "Estate planning, will update hesitation, policy renewal uncertainty, and a request for a lawyer.",
+      opener: "Congratulate him on Jia En getting into NUS before moving into estate planning.",
+      href: `/briefing/${meetings[0].id}`
+    }
+  ],
+  endOfDay: [
+    {
+      id: "eod-guide",
+      title: "Send estate planning guide",
+      detail: "Attach the will update checklist and family transition notes.",
+      target: "todo",
+      status: "ready"
+    },
+    {
+      id: "eod-calendar",
+      title: "Add will planning check-in",
+      detail: "Hold a 20-minute reminder for 2026-07-04.",
+      target: "calendar",
+      status: "ready"
+    },
+    {
+      id: "eod-intro",
+      title: "Review Evelyn Ng introduction",
+      detail: "Draft is ready, but Sarah must approve before any message is sent.",
+      target: "intro",
+      status: "needs_review"
+    }
+  ],
+  networkHealth: {
+    newContactsThisWeek: 6,
+    threeMonthWeeklyAverage: 3,
+    reactivatedContacts: 4,
+    referralOpportunities: 3,
+    healthScore: 82,
+    topSignals: [
+      "New contact pace is 2x the recent weekly average.",
+      "Estate planning is the strongest referral cluster this week.",
+      "Mr. Ong is a warm second-degree lead from Mr. Tan's network."
+    ],
+    touchpoints: [
+      {
+        id: "touch-evelyn",
+        name: "Evelyn Ng",
+        role: "Estate planner",
+        source: "Specialist network",
+        lastContactedAt: "2026-06-18",
+        status: "warm",
+        referralPotential: "high",
+        note: "Best fit for Mr. Tan's will and family transition conversation."
+      },
+      {
+        id: "touch-marcus",
+        name: "Marcus Lee",
+        role: "Lawyer",
+        source: "Sarah's network",
+        lastContactedAt: "2026-06-12",
+        status: "warm",
+        referralPotential: "high",
+        note: "Legal support path if Mr. Tan wants a lawyer instead of a planner first."
+      },
+      {
+        id: "touch-ong",
+        name: "Mr. Ong",
+        role: "Family business owner",
+        source: "Mentioned by Mr. Tan",
+        lastContactedAt: "not contacted",
+        status: "new",
+        referralPotential: "medium",
+        note: "Potential business succession lead; ask Mr. Tan before outreach."
+      }
+    ]
+  },
+  memoryLayer: {
+    current: "Neo4j graph as source of truth, with deterministic demo fallback.",
+    alternatives: [
+      {
+        name: "GraphRAG / graphify",
+        useWhen: "Use if the team wants richer graph extraction and semantic traversal on top of Neo4j.",
+        decision: "later"
+      },
+      {
+        name: "mem0",
+        useWhen: "Use if a higher-level personal memory abstraction becomes faster than direct graph modeling.",
+        decision: "later"
+      },
+      {
+        name: "Direct Neo4j",
+        useWhen: "Use now because referral, family, promises, and meetings are naturally graph-shaped.",
+        decision: "now"
+      }
+    ]
+  },
+  roadmap: [
+    {
+      id: "roadmap-web",
+      stage: "L1-L2",
+      title: "Web voice, graph, live companion, and review loop",
+      owner: "core",
+      status: "built"
+    },
+    {
+      id: "roadmap-overlay",
+      stage: "L2",
+      title: "Phone-friendly in-person meeting overlay",
+      owner: "core",
+      status: "built"
+    },
+    {
+      id: "roadmap-messaging",
+      stage: "L3-L5",
+      title: "OpenClaw, Hermes, WhatsApp ingestion and sending",
+      owner: "integration",
+      status: "later"
+    }
+  ]
+};
 
 export function getClientContext(clientId = client.id): ClientContext {
   if (clientId !== client.id) {
@@ -302,9 +483,51 @@ export function getCalendar() {
     }));
 }
 
-export function extractMeetingSignals(events: TranscriptEvent[]) {
+export function getDailyBrief() {
+  const upcomingMeetings = getCalendar().map((meeting) => ({
+    id: meeting.id,
+    time: new Intl.DateTimeFormat("en-SG", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Asia/Singapore"
+    }).format(new Date(meeting.startsAt)),
+    clientName: meeting.client.name,
+    objective: meeting.objective,
+    lastDiscussed:
+      memories
+        .filter((memory) => memory.status === "open")
+        .slice(0, 4)
+        .map((memory) => memory.title)
+        .join(", ") + ".",
+    opener: "Congratulate him on Jia En getting into NUS before moving into estate planning.",
+    href: `/briefing/${meeting.id}`
+  }));
+
+  return {
+    ...dailyBrief,
+    morning: upcomingMeetings,
+    endOfDay: actions.slice(0, 3).map((action) => ({
+      id: `eod-${action.id}`,
+      title: action.title,
+      detail: action.draftText ?? `Create ${action.actionType.replaceAll("_", " ")} for ${client.name}.`,
+      target:
+        action.actionType === "reminder"
+          ? ("calendar" as const)
+          : action.actionType === "introduction"
+            ? ("intro" as const)
+            : ("todo" as const),
+      status: action.actionType === "introduction" ? ("needs_review" as const) : ("ready" as const)
+    }))
+  };
+}
+
+export function extractMeetingSignals(
+  events: TranscriptEvent[],
+  options: { clientId?: string; meetingId?: string } = {}
+) {
   const text = events.map((event) => event.text).join(" ").toLowerCase();
   const now = new Date().toISOString();
+  const targetClientId = options.clientId ?? client.id;
   const extracted: ExtractedMemory[] = [];
   const suggestions: SilentSuggestion[] = [];
 
@@ -318,11 +541,13 @@ export function extractMeetingSignals(events: TranscriptEvent[]) {
     });
     extracted.push({
       id: "extract-jia-followup",
-      clientId: client.id,
+      clientId: targetClientId,
+      meetingId: options.meetingId,
       category: "Life Event",
       summary: "Jia En's NUS milestone came up again in the meeting.",
       sourceSnippet: latestMatchingSnippet(events, ["nus", "jia"]),
       timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["nus", "jia"]),
       confidence: 0.88,
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_LIFE_EVENT]->(:LifeEvent {title: 'Jia En NUS milestone reconfirmed'})"
@@ -339,11 +564,13 @@ export function extractMeetingSignals(events: TranscriptEvent[]) {
     });
     extracted.push({
       id: "extract-will",
-      clientId: client.id,
+      clientId: targetClientId,
+      meetingId: options.meetingId,
       category: "Unresolved Concern",
       summary: "Will planning remains an active unresolved concern.",
       sourceSnippet: latestMatchingSnippet(events, ["will", "estate"]),
       timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["will", "estate"]),
       confidence: 0.9,
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_CONCERN]->(:Concern {title: 'Will planning remains open'})"
@@ -360,25 +587,88 @@ export function extractMeetingSignals(events: TranscriptEvent[]) {
     });
     extracted.push({
       id: "extract-referral",
-      clientId: client.id,
+      clientId: targetClientId,
+      meetingId: options.meetingId,
       category: "Referral Opportunity",
       summary: "Client is open to estate planning or legal specialist support.",
       sourceSnippet: latestMatchingSnippet(events, ["lawyer", "evelyn", "marcus"]),
       timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["lawyer", "evelyn", "marcus"]),
       confidence: 0.92,
       proposedGraphMutation:
         "MERGE (r:ReferralOpportunity {id: 'referral-estate'}) SET r.status = 'ready_for_intro'"
     });
   }
 
+  if (text.includes("ong") || text.includes("friend") || text.includes("business succession")) {
+    suggestions.push({
+      id: "suggest-network",
+      title: "Ask for permission before tracking the warm lead",
+      reason: "A new second-degree contact could become a referral opportunity, but Sarah should confirm consent.",
+      source: "Networking health signal",
+      priority: "medium"
+    });
+    extracted.push({
+      id: "extract-ong",
+      clientId: targetClientId,
+      meetingId: options.meetingId,
+      category: "Relationship Mention",
+      summary: "Mr. Tan mentioned Mr. Ong as a potential business succession contact.",
+      sourceSnippet: latestMatchingSnippet(events, ["ong", "friend", "business succession"]),
+      timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["ong", "friend", "business succession"]),
+      confidence: 0.8,
+      proposedGraphMutation:
+        "MERGE (p:Person {id: 'person-ong'}) SET p.name = 'Mr. Ong', p.role = 'family business owner'"
+    });
+    extracted.push({
+      id: "extract-business-referral",
+      clientId: targetClientId,
+      meetingId: options.meetingId,
+      category: "Referral Opportunity",
+      summary: "Create a referral watchlist item for Mr. Ong's business succession need.",
+      sourceSnippet: latestMatchingSnippet(events, ["ong", "friend", "business succession"]),
+      timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["ong", "friend", "business succession"]),
+      confidence: 0.76,
+      proposedGraphMutation:
+        "MERGE (r:ReferralOpportunity {id: 'referral-business-succession'}) SET r.status = 'permission_needed'"
+    });
+  }
+
+  if (text.includes("policy") || text.includes("renewal")) {
+    suggestions.push({
+      id: "suggest-policy",
+      title: "Separate protection value from estate planning anxiety",
+      reason: "Policy renewal hesitation is open and may be tangled with the unresolved will update.",
+      source: "Emotional cue from 2026-04-08",
+      priority: "medium"
+    });
+    extracted.push({
+      id: "extract-policy",
+      clientId: targetClientId,
+      meetingId: options.meetingId,
+      category: "Emotional Cue",
+      summary: "Policy renewal hesitation remains active in the conversation.",
+      sourceSnippet: latestMatchingSnippet(events, ["policy", "renewal"]),
+      timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["policy", "renewal"]),
+      confidence: 0.83,
+      proposedGraphMutation:
+        "MERGE (c:Client {id: 'client-tan'})-[:HAS_CONCERN]->(:Concern {title: 'Policy renewal hesitation remains active'})"
+    });
+  }
+
   if (text.includes("guide") || text.includes("send")) {
     extracted.push({
       id: "extract-guide",
-      clientId: client.id,
+      clientId: targetClientId,
+      meetingId: options.meetingId,
       category: "Follow-Up Action",
       summary: "Send the estate planning guide after the meeting.",
       sourceSnippet: latestMatchingSnippet(events, ["guide", "send"]),
       timestamp: now,
+      sourceEventIds: matchingEventIds(events, ["guide", "send"]),
       confidence: 0.87,
       proposedGraphMutation:
         "MERGE (c:Client {id: 'client-tan'})-[:HAS_ACTION]->(:Action {title: 'Send estate planning guide'})"
@@ -406,6 +696,12 @@ function latestMatchingSnippet(events: TranscriptEvent[], terms: string[]) {
     .reverse()
     .find((event) => terms.some((term) => event.text.toLowerCase().includes(term)));
   return match?.text ?? events.at(-1)?.text ?? "No transcript snippet available.";
+}
+
+function matchingEventIds(events: TranscriptEvent[], terms: string[]) {
+  return events
+    .filter((event) => terms.some((term) => event.text.toLowerCase().includes(term)))
+    .map((event) => event.id);
 }
 
 function dedupeById<T extends { id: string }>(items: T[]) {

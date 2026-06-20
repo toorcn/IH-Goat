@@ -24,7 +24,12 @@ export default async function MeetingPage({
         eyebrow="Silent meeting companion"
         title="Keep the client conversation human while Sarah gets live prompts."
         description="This page proves live capture, advisor-only suggestions, and candidate memory extraction from the meeting stream."
-        action={<PrimaryButton href={`/post-meeting/${meeting.id}`}>End and review</PrimaryButton>}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <PrimaryButton href={`/overlay/${meeting.id}`}>Phone overlay</PrimaryButton>
+            <PrimaryButton href={`/post-meeting/${meeting.id}`}>End and review</PrimaryButton>
+          </div>
+        }
       />
 
       <div className="grid gap-3 md:grid-cols-3">

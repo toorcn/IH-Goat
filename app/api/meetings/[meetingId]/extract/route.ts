@@ -14,7 +14,10 @@ export async function POST(
   }
 
   const body = (await request.json()) as { events?: TranscriptEvent[] };
-  const signals = extractMeetingSignals(body.events ?? []);
+  const signals = extractMeetingSignals(body.events ?? [], {
+    clientId: meeting.clientId,
+    meetingId
+  });
 
   return NextResponse.json({
     meetingId,

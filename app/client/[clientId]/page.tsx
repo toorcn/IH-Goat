@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ClientContextPanel } from "@/components/context-panel";
+import { KnowledgeGraphWorkbench } from "@/components/knowledge-graph-workbench";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
 import { AppShell, Badge, MetricCard, Panel, PrimaryButton, SectionHeader } from "@/components/ui";
@@ -38,6 +39,8 @@ export default async function ClientPage({
         <ClientContextPanel context={context} />
         <Timeline context={context} />
       </section>
+
+      <KnowledgeGraphWorkbench context={context} />
 
       <RelationshipGraph nodes={context.graph.nodes} edges={context.graph.edges} />
 
