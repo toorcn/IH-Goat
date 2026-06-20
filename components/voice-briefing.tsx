@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Mic, PlugZap, Send, Square } from "lucide-react";
+import { Mic, Send, Square } from "lucide-react";
 import type { ClientContext } from "@/lib/types";
-import { Badge, EmptyState, Panel } from "./ui";
+import { Badge } from "./ui";
 
 type Message = {
   id: string;
@@ -34,20 +34,37 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   ]);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<RealtimeStatus>("idle");
-  const [statusText, setStatusText] = useState("Ready to start Realtime briefing.");
+  const [statusText, setStatusText] = useState("Tap to start. I'll talk you through it — just ask follow-ups out loud.");
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const transcript = useMemo(() => messages.map((message) => message.text).join(" "), [messages]);
   const connected = status === "connected" || status === "speaking";
+  const speaking = status === "speaking";
+
+  const lastMessage = messages.at(-1);
+  const latestAssistant = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages]
+  );
+  const advisorQuestion = lastMessage?.role === "advisor" ? lastMessage.text : null;
+  const phaseLabel =
+    status === "error"
+      ? "Something went wrong"
+      : status === "connecting"
+        ? "Connecting"
+        : speaking
+          ? "Speaking"
+          : connected
+            ? "Listening"
+            : "Ready";
 
   async function startRealtimeBriefing() {
     if (status === "connecting" || connected) return;
     setStatus("connecting");
-    setStatusText("Minting ephemeral token and opening WebRTC session...");
+    setStatusText("Connecting…");
 
     try {
       const tokenResponse = await fetch("/api/realtime/token", {
@@ -97,7 +114,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       };
       channel.onopen = () => {
         setStatus("connected");
-        setStatusText("Realtime connected. Sarah can ask follow-up questions by voice.");
+        setStatusText("I'm listening — ask me anything about this client.");
         requestAssistantResponse(
           "Speak the prepared pre-meeting briefing now. Then pause and wait for Sarah's voice follow-up questions."
         );
@@ -143,7 +160,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       audioRef.current = null;
     }
     setStatus((current) => (current === "error" ? current : "idle"));
-    setStatusText("Realtime session stopped.");
+    setStatusText("Briefing ended. Tap to start again whenever you're ready.");
   }
 
   function submitTypedQuestion(question: string) {
@@ -223,7 +240,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
 
     if (type === "response.done") {
       setStatus("connected");
-      setStatusText("Realtime connected. Sarah can ask follow-up questions by voice.");
+      setStatusText("I'm listening — ask me anything about this client.");
     }
   }
 
@@ -261,113 +278,138 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   }
 
   return (
-    <Panel
-      title="Pre-Meeting Voice Briefing"
-      eyebrow="OpenAI Realtime"
-      action={<Badge tone={status === "error" ? "rose" : connected ? "signal" : "neutral"}>{status}</Badge>}
-    >
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr]">
-            <button
-              type="button"
-              onClick={() => void startRealtimeBriefing()}
-              disabled={status === "connecting" || connected}
-              className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-cobalt disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <PlugZap className="h-4 w-4" />
-              {status === "connecting" ? "Connecting" : "Start Realtime"}
-            </button>
-            <button
-              type="button"
-              onClick={stopRealtimeBriefing}
-              disabled={!connected && status !== "connecting"}
-              className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line bg-panel px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-rose/50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Square className="h-4 w-4" />
-              Stop
-            </button>
-            <div className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-signal/30 bg-signal/10 px-4 py-2 text-sm font-semibold text-ink">
-              <Mic className="h-4 w-4" />
-              Mic routed to Realtime
-            </div>
-          </div>
+    <section className="surface-enter overflow-hidden rounded-[1.9rem] border border-line/80 bg-panel p-5 shadow-diffusion sm:p-8">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
+          Voice briefing
+        </p>
+        <Badge tone={status === "error" ? "rose" : connected ? "signal" : "neutral"}>{phaseLabel}</Badge>
+      </div>
 
-          <div className="rounded-[1.15rem] border border-line bg-paper p-3 text-sm leading-6 text-muted">
-            {statusText}
-          </div>
-
-          <div className="max-h-[420px] space-y-3 overflow-auto rounded-[1.2rem] border border-line bg-paper p-3">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`rounded-[1rem] p-3 ${
-                  message.role === "assistant"
-                    ? "bg-panel text-ink"
-                    : message.role === "advisor"
-                      ? "bg-cobalt/10 text-ink"
-                      : "bg-amber/10 text-ink"
-                }`}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                  {message.role === "assistant" ? "Assistant" : message.role === "advisor" ? context.advisor.name : "System"}
-                </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{message.text || "..."}</p>
-              </div>
-            ))}
-          </div>
-
-          <form
-            className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitTypedQuestion(draft);
-            }}
+      {/* Voice stage — the orb visibly reacts so the advisor can see it listening and responding. */}
+      <div className="mt-6 flex flex-col items-center text-center">
+        <button
+          type="button"
+          onClick={() => (connected ? stopRealtimeBriefing() : void startRealtimeBriefing())}
+          aria-label={connected ? "Stop briefing" : "Start briefing"}
+          className="focus-ring pressable relative flex h-40 w-40 items-center justify-center rounded-full sm:h-48 sm:w-48"
+        >
+          {connected ? (
+            <>
+              <span className="voice-ring absolute inset-0 rounded-full bg-signal/25" />
+              <span className="voice-ring voice-ring--delay absolute inset-0 rounded-full bg-signal/20" />
+            </>
+          ) : null}
+          <span
+            className={`relative flex h-32 w-32 items-center justify-center rounded-full border text-paper transition-colors sm:h-36 sm:w-36 ${
+              status === "error"
+                ? "border-rose/40 bg-rose"
+                : connected
+                  ? "border-signal/40 bg-ink voice-breathe"
+                  : status === "connecting"
+                    ? "border-line bg-ink/80 voice-breathe"
+                    : "border-line bg-ink"
+            }`}
           >
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              disabled={!connected}
-              placeholder={connected ? `Optional typed test for ${context.client.name}` : "Start Realtime to ask"}
-              className="focus-ring min-h-11 min-w-0 rounded-full border border-line bg-panel px-4 py-2.5 text-sm text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={!connected || !draft.trim()}
-              className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-signal/80 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Send className="h-4 w-4" />
-              Ask
-            </button>
-          </form>
-        </div>
+            {speaking ? (
+              <span className="flex items-end gap-1.5" aria-hidden>
+                {[0, 1, 2, 3, 4].map((bar) => (
+                  <span
+                    key={bar}
+                    className="voice-bar h-8 w-1.5 rounded-full bg-paper"
+                    style={{ animationDelay: `${bar * 120}ms` }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <Mic className="h-9 w-9" />
+            )}
+          </span>
+        </button>
 
-        <aside className="rounded-[1.2rem] border border-line bg-paper p-3 sm:p-4">
-          <p className="text-sm font-semibold text-ink">Suggested follow-ups</p>
-          <div className="mt-3 space-y-2">
+        <p className="mt-6 text-lg font-semibold tracking-tight text-ink">{phaseLabel}</p>
+        <p className="mt-2 max-w-md text-sm leading-6 text-muted">{statusText}</p>
+      </div>
+
+      {/* Live captions — proof that it heard you and is answering. */}
+      <div className="mx-auto mt-7 max-w-2xl space-y-3">
+        {advisorQuestion ? (
+          <div className="caption-enter ml-auto w-fit max-w-[85%] rounded-[1.1rem] rounded-br-md bg-cobalt/10 px-4 py-2.5 text-right text-sm leading-6 text-ink">
+            <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">
+              {context.advisor.name}
+            </span>
+            {advisorQuestion}
+          </div>
+        ) : null}
+
+        <div
+          key={latestAssistant?.id}
+          className="caption-enter rounded-[1.4rem] border border-line bg-paper p-4 sm:p-5"
+        >
+          <span className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">
+            {speaking ? "Speaking now" : "Briefing"}
+          </span>
+          <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-ink">
+            {latestAssistant?.text || (connected ? "…" : context.briefing)}
+            {speaking ? <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-ink align-middle" /> : null}
+          </p>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="mx-auto mt-6 flex max-w-2xl flex-col gap-3">
+        {connected ? (
+          <button
+            type="button"
+            onClick={stopRealtimeBriefing}
+            className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 self-center rounded-full border border-line bg-panel px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-rose/50"
+          >
+            <Square className="h-4 w-4" />
+            End briefing
+          </button>
+        ) : null}
+
+        {context.suggestedQuestions.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-2">
             {context.suggestedQuestions.map((question) => (
               <button
                 key={question}
                 type="button"
                 onClick={() => submitTypedQuestion(question)}
                 disabled={!connected}
-                className="focus-ring pressable w-full rounded-[1rem] border border-line bg-panel px-3 py-2 text-left text-sm leading-5 text-ink transition-colors hover:border-signal/50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="focus-ring pressable rounded-full border border-line bg-paper px-3.5 py-2 text-left text-xs leading-5 text-ink transition-colors hover:border-signal/50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {question}
               </button>
             ))}
           </div>
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Transcript size</p>
-            {transcript ? (
-              <p className="mt-1 text-sm text-ink">{transcript.length} characters</p>
-            ) : (
-              <EmptyState>No transcript yet.</EmptyState>
-            )}
-          </div>
-        </aside>
+        ) : null}
+
+        <form
+          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitTypedQuestion(draft);
+          }}
+        >
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            disabled={!connected}
+            placeholder={connected ? "Prefer to type? Ask here" : "Start the briefing to ask by voice or text"}
+            className="focus-ring min-h-11 min-w-0 rounded-full border border-line bg-paper px-4 py-2.5 text-sm text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={!connected || !draft.trim()}
+            className="focus-ring pressable inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-signal px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-signal/80 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Send className="h-4 w-4" />
+            Ask
+          </button>
+        </form>
       </div>
-    </Panel>
+    </section>
   );
 }
 
