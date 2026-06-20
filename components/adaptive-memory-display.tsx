@@ -144,6 +144,7 @@ export function CompactRelationshipGraph({
   hero: boolean;
 }) {
   const positions = buildPositions(graph.nodes);
+  const visibleEdges = graph.edges.filter((edge) => positions[edge.source] && positions[edge.target]);
 
   return (
     <div className="mt-3 rounded-lg border border-line bg-paper p-3">
@@ -157,12 +158,11 @@ export function CompactRelationshipGraph({
         <Badge tone="cobalt">graph</Badge>
       </div>
 
-      <div className={`${hero ? "min-h-[420px]" : "min-h-[320px]"} relative mt-3 overflow-hidden rounded-[1rem] border border-line bg-panel`}>
+      <div className={`${hero ? "min-h-[440px]" : "min-h-[360px]"} relative mt-3 overflow-hidden rounded-[1rem] border border-line bg-panel`}>
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-          {graph.edges.map((edge) => {
+          {visibleEdges.map((edge) => {
             const source = positions[edge.source];
             const target = positions[edge.target];
-            if (!source || !target) return null;
             return (
               <g key={edge.id}>
                 <line
@@ -171,17 +171,9 @@ export function CompactRelationshipGraph({
                   x2={target.x}
                   y2={target.y}
                   stroke="oklch(64% 0.045 230)"
-                  strokeWidth="0.45"
+                  strokeWidth="0.32"
+                  strokeOpacity="0.68"
                 />
-                <text
-                  x={(source.x + target.x) / 2}
-                  y={(source.y + target.y) / 2 - 1.2}
-                  fill="oklch(42% 0.035 235)"
-                  fontSize="2.4"
-                  textAnchor="middle"
-                >
-                  {edge.label}
-                </text>
               </g>
             );
           })}
@@ -192,16 +184,26 @@ export function CompactRelationshipGraph({
           return (
             <div
               key={node.id}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-[1rem] border bg-paper/95 p-2 shadow-soft backdrop-blur ${
-                hero ? "w-40" : "w-32"
-              } ${nodeTone(node.type)}`}
+              className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${
+                hero ? "w-28" : "w-24"
+              }`}
               style={{ left: `${position.x}%`, top: `${position.y}%` }}
+              title={`${node.label} - ${formatNodeType(node.type)}${node.note ? `: ${node.note}` : ""}`}
             >
-              <p className="truncate text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-muted">
-                {formatNodeType(node.type)}
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full border-2 bg-paper shadow-soft ${
+                  hero ? "h-7 w-7" : ""
+                } ${nodeTone(node.type)}`}
+                aria-hidden
+              >
+                <span className={`block rounded-full ${hero ? "h-3 w-3" : "h-2.5 w-2.5"} ${nodeDot(node.type)}`} />
+              </span>
+              <p className="mt-1.5 w-full truncate text-[0.72rem] font-semibold leading-4 text-ink">
+                {node.label}
               </p>
-              <p className="mt-1 truncate text-sm font-semibold text-ink">{node.label}</p>
-              {hero ? <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted">{node.note}</p> : null}
+              <p className="mt-0.5 line-clamp-2 w-full text-[0.62rem] leading-3 text-muted">
+                {node.note || formatNodeType(node.type)}
+              </p>
             </div>
           );
         })}
@@ -230,13 +232,18 @@ function buildPositions(nodes: GraphNode[]) {
 
   unknown.forEach((node, index) => {
     const angle = (Math.PI * 2 * index) / Math.max(unknown.length, 1) - Math.PI / 2;
+    const radius = unknown.length > 6 ? 38 : 32;
     positions[node.id] = {
-      x: 50 + Math.cos(angle) * 32,
-      y: 50 + Math.sin(angle) * 32
+      x: clamp(50 + Math.cos(angle) * radius, 13, 87),
+      y: clamp(50 + Math.sin(angle) * radius, 14, 86)
     };
   });
 
   return positions;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function containerClass(hero: boolean) {
@@ -270,10 +277,19 @@ function displayModeIcon(mode: MemoryQueryVisualResponse["displayMode"]): ReactN
 }
 
 function nodeTone(type: GraphNode["type"]) {
-  if (type === "Client") return "border-signal/40";
-  if (type === "ReferralOpportunity") return "border-amber/50";
-  if (type === "Specialist") return "border-cobalt/40";
-  return "border-line";
+  if (type === "Client") return "border-signal/50";
+  if (type === "Advisor") return "border-cobalt/45";
+  if (type === "ReferralOpportunity") return "border-amber/55";
+  if (type === "Specialist") return "border-rose/45";
+  return "border-ink/25";
+}
+
+function nodeDot(type: GraphNode["type"]) {
+  if (type === "Client") return "bg-signal";
+  if (type === "Advisor") return "bg-cobalt";
+  if (type === "ReferralOpportunity") return "bg-amber";
+  if (type === "Specialist") return "bg-rose";
+  return "bg-ink";
 }
 
 function formatNodeType(type: GraphNode["type"]) {

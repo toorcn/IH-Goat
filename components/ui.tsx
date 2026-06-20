@@ -1,14 +1,34 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, CheckCircle2, ChevronDown, CircleAlert, Clock, Radio } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleAlert, Clock, Radio } from "lucide-react";
+import { HeaderMoreMenu } from "@/components/header-more-menu";
 
 type BadgeTone = "neutral" | "signal" | "amber" | "rose" | "cobalt";
 type FeatureTone = "signal" | "amber" | "rose" | "cobalt";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  fitViewport = false
+}: {
+  children: ReactNode;
+  fitViewport?: boolean;
+}) {
+  const menuItems = [
+    { href: "/", label: "Dashboard" },
+    { href: "/qna/meeting-2026-06-20-tan", label: "Q&A" },
+    { href: "/client/client-tan", label: "Client" },
+    { href: "/post-meeting/meeting-2026-06-20-tan", label: "Review" }
+  ];
+
   return (
-    <main className="min-h-[100dvh]">
-      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 px-4 py-4 sm:px-6 lg:gap-7 lg:px-8 lg:py-6">
+    <main className={fitViewport ? "h-[100dvh] overflow-hidden" : "min-h-[100dvh]"}>
+      <div
+        className={`mx-auto flex w-full max-w-[1400px] flex-col px-4 sm:px-6 lg:px-8 ${
+          fitViewport
+            ? "h-full gap-3 py-3 sm:py-4 lg:gap-4 lg:py-4"
+            : "gap-5 py-4 lg:gap-7 lg:py-6"
+        }`}
+      >
         <header className="relative z-30 rounded-[1.25rem] border border-line/80 bg-panel/82 p-1.5 shadow-diffusion backdrop-blur-xl">
           <div className="flex items-center justify-between gap-2">
             <Link
@@ -23,22 +43,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <nav className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted sm:gap-2">
               <NavLink href="/briefing/meeting-2026-06-20-tan">Briefing</NavLink>
               <NavLink href="/live/meeting-2026-06-20-tan">Meeting</NavLink>
-              <details className="group relative">
-                <summary className="focus-ring pressable flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-full border border-transparent px-3 py-1.5 text-ink transition-colors hover:border-line hover:bg-paper [&::-webkit-details-marker]:hidden">
-                  More
-                  <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="absolute right-0 top-[calc(100%+0.45rem)] z-50 min-w-36 overflow-hidden rounded-[1rem] border border-line/80 bg-panel p-1.5 shadow-diffusion backdrop-blur-xl">
-                  <MenuLink href="/">Dashboard</MenuLink>
-                  <MenuLink href="/qna/meeting-2026-06-20-tan">Q&A</MenuLink>
-                  <MenuLink href="/client/client-tan">Client</MenuLink>
-                  <MenuLink href="/post-meeting/meeting-2026-06-20-tan">Review</MenuLink>
-                </div>
-              </details>
+              <HeaderMoreMenu items={menuItems} />
             </nav>
           </div>
         </header>
-        <div className="flex flex-col gap-5 lg:gap-7">{children}</div>
+        <div
+          className={
+            fitViewport
+              ? "flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:gap-4"
+              : "flex flex-col gap-5 lg:gap-7"
+          }
+        >
+          {children}
+        </div>
       </div>
     </main>
   );
@@ -49,17 +66,6 @@ export function NavLink({ href, children }: { href: string; children: ReactNode 
     <Link
       href={href}
       className="focus-ring pressable shrink-0 rounded-full border border-transparent px-3 py-1.5 text-ink transition-colors hover:border-line hover:bg-paper sm:px-3.5 sm:py-2"
-    >
-      {children}
-    </Link>
-  );
-}
-
-function MenuLink({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="focus-ring block rounded-[0.75rem] px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-paper"
     >
       {children}
     </Link>

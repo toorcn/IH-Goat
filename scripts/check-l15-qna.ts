@@ -31,9 +31,10 @@ assert(workspace.includes("AdaptiveMemoryDisplay"), "Q&A workspace must render a
 assert(adaptiveDisplay.includes("CompactRelationshipGraph"), "Adaptive display must include graph renderer");
 assert(adaptiveDisplay.includes("Relationship map"), "Graph renderer must show relationship-map copy");
 assert(voiceBriefing.includes("Latest answer"), "Briefing must pin latest answer near the top");
-assert(voiceBriefing.includes("variant=\"hero\""), "Briefing must render hero adaptive answer");
+assert(voiceBriefing.includes("Built-in Q&A context"), "Briefing must include Q&A context in the voice surface");
+assert(voiceBriefing.includes("variant=\"compact\""), "Briefing must render a compact adaptive answer");
 assert(ui.includes("/qna/meeting-2026-06-20-tan"), "Header nav must link Q&A route");
-assert(dashboard.includes("L1.5 Q&A"), "Dashboard must expose L1.5 Q&A");
-assert(briefingPage.includes("Open Q&A-only view"), "Briefing page must link to Q&A-only view");
+assert(dashboard.includes("Voice Briefing"), "Dashboard must expose the integrated voice briefing");
+assert(!briefingPage.includes("Open Q&A-only view"), "Briefing page must not require opening Q&A-only view");
 
 console.log("L1.5 Q&A check passed");

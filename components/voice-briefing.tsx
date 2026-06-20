@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, Square } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { CalendarClock, CheckCircle2, CircleHelp, Mic, Square, UserRound } from "lucide-react";
 import { AdaptiveMemoryDisplay, CompactRelationshipGraph } from "@/components/adaptive-memory-display";
 import type { ClientContext, MemoryQueryVisualResponse } from "@/lib/types";
 import { Badge } from "./ui";
@@ -30,6 +30,9 @@ type TokenResponse = {
 
 const LIVE_PREFIX = "live-";
 const realtimeCallsUrl = "https://api.openai.com/v1/realtime/calls";
+const TEXT_REVEAL_DELAY_MS = 240;
+const VISUAL_REVEAL_DELAY_MS = 900;
+const AUTO_SCROLL_BOTTOM_GAP = 96;
 
 function tryParseJSON(str: string) {
   const cleaned = str.trim();
@@ -232,6 +235,235 @@ function VisualGraph({ graph }: { graph: { nodes?: Array<{ id: string; label: st
   return <CompactRelationshipGraph graph={formattedGraph} hero={false} />;
 }
 
+function takeRevealChunk(text: string) {
+  const newlineIndex = text.indexOf("\n");
+  if (newlineIndex >= 0 && newlineIndex < 140) {
+    return {
+      chunk: text.slice(0, newlineIndex + 1),
+      rest: text.slice(newlineIndex + 1)
+    };
+  }
+
+  const sentence = text.match(/^([\s\S]{24,180}?[.!?])(\s+|$)/);
+  if (sentence) {
+    const length = sentence[0].length;
+    return { chunk: text.slice(0, length), rest: text.slice(length) };
+  }
+
+  const words = text.match(/^(\S+\s*){1,6}/);
+  if (words) {
+    const length = words[0].length;
+    return { chunk: text.slice(0, length), rest: text.slice(length) };
+  }
+
+  return { chunk: text, rest: "" };
+}
+
+function splitVisualTextUnits(text: string) {
+  const cleaned = text.trim();
+  if (!cleaned) return [];
+  return cleaned.match(/[^.!?\n]+(?:[.!?]+|\n+|$)\s*/g) ?? [cleaned];
+}
+
+function visualStepCount(response: MemoryQueryVisualResponse) {
+  const answerSteps = Math.max(splitVisualTextUnits(response.answer).length, response.answer.trim() ? 1 : 0);
+  const graphSteps = response.graph ? Math.max(response.graph.nodes.length, 1) : 0;
+
+  return Math.max(
+    1,
+    answerSteps +
+      (response.missingInfo ? 1 : 0) +
+      graphSteps +
+      (response.cards?.length ?? 0) +
+      (response.rows?.length ?? 0) +
+      (response.actions?.length ?? 0) +
+      response.citations.length +
+      (response.warning ? 1 : 0)
+  );
+}
+
+function visualResponseKey(response: MemoryQueryVisualResponse) {
+  return [
+    response.query,
+    response.displayMode,
+    response.answer,
+    response.graph?.nodes.length ?? 0,
+    response.cards?.length ?? 0,
+    response.rows?.length ?? 0,
+    response.actions?.length ?? 0,
+    response.citations.length
+  ].join("|");
+}
+
+function stagedVisualResponse(response: MemoryQueryVisualResponse, step: number): MemoryQueryVisualResponse {
+  const answerUnits = splitVisualTextUnits(response.answer);
+  const answerSteps = Math.max(answerUnits.length, response.answer.trim() ? 1 : 0);
+  const visibleAnswer = answerUnits.length
+    ? answerUnits.slice(0, Math.min(step, answerSteps)).join("").trim()
+    : response.answer;
+
+  let remaining = Math.max(0, step - answerSteps);
+  const showMissingInfo = Boolean(response.missingInfo && remaining-- > 0);
+
+  let graph = response.graph;
+  if (response.graph) {
+    const visibleNodeCount = Math.max(0, Math.min(response.graph.nodes.length, remaining));
+    remaining = Math.max(0, remaining - response.graph.nodes.length);
+    const nodes = response.graph.nodes.slice(0, visibleNodeCount);
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    graph = nodes.length
+      ? {
+          nodes,
+          edges: response.graph.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+        }
+      : undefined;
+  }
+
+  const cardCount = Math.max(0, Math.min(response.cards?.length ?? 0, remaining));
+  remaining = Math.max(0, remaining - (response.cards?.length ?? 0));
+  const rowCount = Math.max(0, Math.min(response.rows?.length ?? 0, remaining));
+  remaining = Math.max(0, remaining - (response.rows?.length ?? 0));
+  const actionCount = Math.max(0, Math.min(response.actions?.length ?? 0, remaining));
+  remaining = Math.max(0, remaining - (response.actions?.length ?? 0));
+  const citationCount = Math.max(0, Math.min(response.citations.length, remaining));
+  remaining = Math.max(0, remaining - response.citations.length);
+
+  return {
+    ...response,
+    answer: visibleAnswer,
+    missingInfo: showMissingInfo ? response.missingInfo : undefined,
+    graph,
+    cards: response.cards?.slice(0, cardCount),
+    rows: response.rows?.slice(0, rowCount),
+    actions: response.actions?.slice(0, actionCount),
+    citations: response.citations.slice(0, citationCount),
+    warning: remaining > 0 ? response.warning : undefined
+  };
+}
+
+function ProgressiveAdaptiveMemoryDisplay({
+  response,
+  onRevealStep
+}: {
+  response: MemoryQueryVisualResponse;
+  onRevealStep?: () => void;
+}) {
+  const [step, setStep] = useState(1);
+  const totalSteps = visualStepCount(response);
+
+  useEffect(() => {
+    onRevealStep?.();
+  }, [onRevealStep, step]);
+
+  useEffect(() => {
+    if (totalSteps <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setStep((current) => {
+        if (current >= totalSteps) {
+          window.clearInterval(timer);
+          return current;
+        }
+        return current + 1;
+      });
+    }, VISUAL_REVEAL_DELAY_MS);
+
+    return () => window.clearInterval(timer);
+  }, [response, totalSteps]);
+
+  return <AdaptiveMemoryDisplay response={stagedVisualResponse(response, step)} variant="compact" title="Latest answer" />;
+}
+
+function BriefingContextBoard({ context }: { context: ClientContext }) {
+  const meetingTime = formatBriefingTime(context.upcomingMeeting.startsAt);
+  const priorityMemories = context.memories
+    .filter((memory) => memory.status === "open" || memory.status === "pending" || memory.salience >= 8)
+    .sort((a, b) => b.salience - a.salience)
+    .slice(0, 3);
+  const openActions = context.actions
+    .filter((action) => action.status === "pending" || action.status === "approved")
+    .slice(0, 2);
+  const suggestedQuestions = context.suggestedQuestions.slice(0, 2);
+
+  return (
+    <div className="mx-5 grid gap-3 rounded-[1.35rem] border border-line/80 bg-paper/80 p-3 shadow-soft sm:mx-8 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] sm:p-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-signal/25 bg-signal/10 text-signal">
+            <UserRound className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-ink">{context.client.name}</p>
+            <p className="truncate text-xs leading-5 text-muted">
+              {context.client.clientType} - {context.client.riskProfile}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2 text-sm leading-5 text-ink">
+          <GlanceLine
+            icon={<CalendarClock className="h-3.5 w-3.5" />}
+            label={meetingTime}
+            body={context.upcomingMeeting.objective}
+          />
+          {openActions[0] ? (
+            <GlanceLine
+              icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+              label="Open follow-up"
+              body={openActions[0].title}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      <div className="min-w-0 rounded-[1rem] border border-line/70 bg-panel/70 p-3">
+        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-muted">
+          Built-in Q&A context
+        </p>
+        <div className="mt-2 space-y-2">
+          {[...suggestedQuestions, ...priorityMemories.map((memory) => memory.title)]
+            .slice(0, 3)
+            .map((item, index) => (
+              <div key={`${item}-${index}`} className="flex gap-2 text-sm leading-5 text-ink">
+                <CircleHelp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal" />
+                <p className="line-clamp-2">{item}</p>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GlanceLine({
+  icon,
+  label,
+  body
+}: {
+  icon: ReactNode;
+  label: string;
+  body: string;
+}) {
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+      <span className="mt-0.5 text-signal">{icon}</span>
+      <p className="min-w-0">
+        <span className="font-semibold text-ink">{label}</span>
+        <span className="text-muted"> - </span>
+        <span className="text-muted">{body}</span>
+      </p>
+    </div>
+  );
+}
+
+function formatBriefingTime(value: string) {
+  return new Intl.DateTimeFormat("en-SG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Singapore"
+  }).format(new Date(value));
+}
+
 export function DynamicResponseContent({ text, isLiveTurn, speaking }: { text: string; isLiveTurn: boolean; speaking: boolean }) {
   if (!text) {
     return <p className="mt-2 text-base leading-7 text-ink">…</p>;
@@ -279,7 +511,7 @@ export function DynamicResponseContent({ text, isLiveTurn, speaking }: { text: s
 
         const lines = part.split("\n");
         const listItems: string[] = [];
-        const contentElements: React.ReactNode[] = [];
+        const contentElements: ReactNode[] = [];
 
         const flushList = (key: string) => {
           if (listItems.length > 0) {
@@ -321,7 +553,13 @@ export function DynamicResponseContent({ text, isLiveTurn, speaking }: { text: s
   );
 }
 
-export function VoiceBriefing({ context }: { context: ClientContext }) {
+export function VoiceBriefing({
+  context,
+  fillViewport = false
+}: {
+  context: ClientContext;
+  fillViewport?: boolean;
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [status, setStatus] = useState<RealtimeStatus>("idle");
   const [statusText, setStatusText] = useState(
@@ -337,11 +575,25 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const counterRef = useRef(0);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(false);
+  const sessionRunRef = useRef(0);
+  const scrollPinnedRef = useRef(true);
+  const revealQueuesRef = useRef<Map<string, string>>(new Map());
+  const revealTimersRef = useRef<Map<string, number>>(new Map());
+  const receivedTextRef = useRef<Map<string, string>>(new Map());
+  const revealedTextRef = useRef<Map<string, string>>(new Map());
+  const completedTurnIdsRef = useRef<Set<string>>(new Set());
+  const pendingVisualRef = useRef<MemoryQueryVisualResponse | null>(null);
+  const pendingVisualSourceTurnIdRef = useRef<string | null>(null);
+  const liveResponseIdRef = useRef<string | null>(null);
+  const turnIdsByResponseIdRef = useRef<Map<string, string>>(new Map());
   // Track the ID of the current live turn so stale closures can target it
   const liveTurnIdRef = useRef<string | null>(null);
 
   const connected = status === "connected" || status === "speaking";
   const speaking = status === "speaking";
+  const visibleTurns = turns.slice(-2);
+  const showContextBoard = !orbMinimised && turns.length === 0;
 
   const phaseLabel =
     status === "error"
@@ -354,12 +606,59 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
             ? "Listening"
             : "Ready";
 
-  // Auto-scroll feed to bottom whenever turns update
+  const closeRealtimeResources = useCallback(() => {
+    channelRef.current?.close();
+    channelRef.current = null;
+    peerRef.current?.close();
+    peerRef.current = null;
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+    if (audioRef.current) {
+      audioRef.current.srcObject = null;
+      audioRef.current.remove();
+      audioRef.current = null;
+    }
+    revealTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    revealTimersRef.current.clear();
+    revealQueuesRef.current.clear();
+    receivedTextRef.current.clear();
+    revealedTextRef.current.clear();
+    completedTurnIdsRef.current.clear();
+    pendingVisualRef.current = null;
+    pendingVisualSourceTurnIdRef.current = null;
+    liveResponseIdRef.current = null;
+    turnIdsByResponseIdRef.current.clear();
+    liveTurnIdRef.current = null;
+  }, []);
+
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      sessionRunRef.current += 1;
+      closeRealtimeResources();
+    };
+  }, [closeRealtimeResources]);
+
+  const scrollFeedToBottom = useCallback(() => {
+    const el = feedRef.current;
+    if (!el || !scrollPinnedRef.current) return;
+    window.requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
+  }, []);
+
+  // Auto-scroll only while the advisor is already following the live bottom.
+  useEffect(() => {
+    scrollFeedToBottom();
+  }, [scrollFeedToBottom, turns]);
+
+  const handleFeedScroll = useCallback(() => {
     const el = feedRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [turns]);
+    const bottomGap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    scrollPinnedRef.current = bottomGap < AUTO_SCROLL_BOTTOM_GAP;
+  }, []);
 
   // Generate a unique ID outside of any setState callback to avoid double-invoke issues
   function nextId(prefix: string) {
@@ -367,8 +666,9 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
     return `${prefix}${counterRef.current}`;
   }
 
-  // Append delta text to the current live turn (identified by liveTurnIdRef)
-  const appendLiveDelta = useCallback((id: string, delta: string) => {
+  // Append text that has passed through the paced reveal queue.
+  const appendRevealedText = useCallback((id: string, delta: string) => {
+    revealedTextRef.current.set(id, `${revealedTextRef.current.get(id) ?? ""}${delta}`);
     setTurns((current) => {
       return current.map((turn) =>
         turn.id === id ? { ...turn, text: `${turn.text}${delta}` } : turn
@@ -376,31 +676,127 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
     });
   }, []);
 
-  // Replace the live turn's text with the final full transcript
-  const finaliseLiveTurn = useCallback((id: string, finalText: string) => {
-    setTurns((current) =>
-      current.map((turn) =>
-        turn.id === id && finalText ? { ...turn, text: finalText } : turn
-      )
-    );
+  const finishLiveTurnIfRevealed = useCallback((id: string) => {
+    const queue = revealQueuesRef.current.get(id);
+    if (queue || !completedTurnIdsRef.current.has(id)) return;
+    if (liveTurnIdRef.current === id) {
+      liveTurnIdRef.current = null;
+      setTurns((current) => [...current]);
+    }
   }, []);
 
-  // Attach a visual response to the most recent assistant turn
-  const attachVisualToLastAssistant = useCallback((visual: MemoryQueryVisualResponse) => {
+  const scheduleReveal = useCallback(
+    (id: string) => {
+      if (revealTimersRef.current.has(id)) return;
+
+      const timer = window.setTimeout(() => {
+        revealTimersRef.current.delete(id);
+        const queued = revealQueuesRef.current.get(id) ?? "";
+        if (!queued) {
+          finishLiveTurnIfRevealed(id);
+          return;
+        }
+
+        const { chunk, rest } = takeRevealChunk(queued);
+        revealQueuesRef.current.set(id, rest);
+        appendRevealedText(id, chunk);
+
+        if (rest) {
+          scheduleReveal(id);
+        } else {
+          revealQueuesRef.current.delete(id);
+          finishLiveTurnIfRevealed(id);
+        }
+      }, TEXT_REVEAL_DELAY_MS);
+
+      revealTimersRef.current.set(id, timer);
+    },
+    [appendRevealedText, finishLiveTurnIfRevealed]
+  );
+
+  // Queue transcript text so large deltas/final transcripts reveal in readable steps.
+  const enqueueLiveText = useCallback(
+    (id: string, text: string) => {
+      if (!text) return;
+      revealQueuesRef.current.set(id, `${revealQueuesRef.current.get(id) ?? ""}${text}`);
+      scheduleReveal(id);
+    },
+    [scheduleReveal]
+  );
+
+  const appendLiveDelta = useCallback(
+    (id: string, delta: string) => {
+      receivedTextRef.current.set(id, `${receivedTextRef.current.get(id) ?? ""}${delta}`);
+      enqueueLiveText(id, delta);
+    },
+    [enqueueLiveText]
+  );
+
+  // Final transcripts sometimes arrive as one large event; reveal only the unseen suffix.
+  const finaliseLiveTurn = useCallback(
+    (id: string, finalText: string) => {
+      if (!finalText) return;
+      const receivedText = receivedTextRef.current.get(id) ?? "";
+      if (!receivedText) {
+        receivedTextRef.current.set(id, finalText);
+        enqueueLiveText(id, finalText);
+        return;
+      }
+
+      if (finalText.startsWith(receivedText) && finalText.length > receivedText.length) {
+        const suffix = finalText.slice(receivedText.length);
+        receivedTextRef.current.set(id, finalText);
+        enqueueLiveText(id, suffix);
+      }
+    },
+    [enqueueLiveText]
+  );
+
+  const attachVisualToTurn = useCallback((id: string, visual: MemoryQueryVisualResponse) => {
     setTurns((current) => {
-      const lastAssistantIndex = current.reduce<number>(
-        (acc, turn, index) => (turn.role === "assistant" ? index : acc),
-        -1
-      );
-      if (lastAssistantIndex === -1) return current;
-      return current.map((turn, index) =>
-        index === lastAssistantIndex ? { ...turn, visual } : turn
+      return current.map((turn) =>
+        turn.id === id ? { ...turn, visual } : turn
       );
     });
   }, []);
 
+  const attachPendingVisualToTurn = useCallback(
+    (id: string) => {
+      const visual = pendingVisualRef.current;
+      if (!visual || pendingVisualSourceTurnIdRef.current === id) return;
+      pendingVisualRef.current = null;
+      pendingVisualSourceTurnIdRef.current = null;
+      attachVisualToTurn(id, visual);
+    },
+    [attachVisualToTurn]
+  );
+
+  const responseIdFromEvent = useCallback((event: Record<string, unknown>) => {
+    const directId = stringField(event.response_id);
+    if (directId) return directId;
+    const response =
+      event.response && typeof event.response === "object" ? (event.response as Record<string, unknown>) : null;
+    return response ? stringField(response.id) : "";
+  }, []);
+
+  const turnIdForEvent = useCallback(
+    (event: Record<string, unknown>) => {
+      const responseId = responseIdFromEvent(event);
+      if (responseId) {
+        const turnId = turnIdsByResponseIdRef.current.get(responseId);
+        if (turnId) return turnId;
+      }
+      return liveTurnIdRef.current;
+    },
+    [responseIdFromEvent]
+  );
+
   async function startRealtimeBriefing() {
     if (status === "connecting" || connected) return;
+    const sessionRun = sessionRunRef.current + 1;
+    sessionRunRef.current = sessionRun;
+    const isCurrentSession = () => mountedRef.current && sessionRunRef.current === sessionRun;
+
     setStatus("connecting");
     setStatusText("Connecting…");
 
@@ -421,17 +817,27 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       if (!tokenResponse.ok || !ephemeralKey) {
         throw new Error(token.detail ?? token.error ?? token.message ?? "Unable to create Realtime token.");
       }
+      if (!isCurrentSession()) return;
 
       const peer = new RTCPeerConnection();
+      if (!isCurrentSession()) {
+        peer.close();
+        return;
+      }
       peerRef.current = peer;
 
       audioRef.current = document.createElement("audio");
       audioRef.current.autoplay = true;
       peer.ontrack = (event) => {
-        if (audioRef.current) audioRef.current.srcObject = event.streams[0];
+        if (isCurrentSession() && audioRef.current) audioRef.current.srcObject = event.streams[0];
       };
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!isCurrentSession()) {
+        stream.getTracks().forEach((track) => track.stop());
+        peer.close();
+        return;
+      }
       localStreamRef.current = stream;
       for (const track of stream.getAudioTracks()) peer.addTrack(track, stream);
 
@@ -439,16 +845,21 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       channelRef.current = channel;
 
       // Bind handler fresh at connection time; it uses only refs and stable setters/callbacks
-      channel.onmessage = (event) => void handleRealtimeEvent(event.data);
+      channel.onmessage = (event) => {
+        if (isCurrentSession()) void handleRealtimeEvent(event.data);
+      };
       channel.onerror = () => {
+        if (!isCurrentSession()) return;
         setStatus("error");
         setStatusText("Realtime data channel failed.");
       };
       channel.onclose = () => {
+        if (!isCurrentSession()) return;
         setStatus((current) => (current === "error" ? current : "idle"));
         setStatusText("Realtime session closed.");
       };
       channel.onopen = () => {
+        if (!isCurrentSession()) return;
         setStatus("connected");
         setStatusText("I'm listening — ask me anything about this client.");
         requestAssistantResponse(
@@ -457,7 +868,9 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       };
 
       const offer = await peer.createOffer();
+      if (!isCurrentSession()) return;
       await peer.setLocalDescription(offer);
+      if (!isCurrentSession()) return;
 
       const sdpResponse = await fetch(realtimeCallsUrl, {
         method: "POST",
@@ -469,8 +882,10 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       });
 
       if (!sdpResponse.ok) throw new Error(await sdpResponse.text());
+      if (!isCurrentSession()) return;
       await peer.setRemoteDescription({ type: "answer", sdp: await sdpResponse.text() });
     } catch (caught) {
+      if (!isCurrentSession()) return;
       stopRealtimeBriefing();
       setStatus("error");
       setStatusText(caught instanceof Error ? caught.message : "Realtime briefing failed.");
@@ -478,18 +893,8 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   }
 
   function stopRealtimeBriefing() {
-    channelRef.current?.close();
-    channelRef.current = null;
-    peerRef.current?.close();
-    peerRef.current = null;
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
-    localStreamRef.current = null;
-    if (audioRef.current) {
-      audioRef.current.srcObject = null;
-      audioRef.current.remove();
-      audioRef.current = null;
-    }
-    liveTurnIdRef.current = null;
+    sessionRunRef.current += 1;
+    closeRealtimeResources();
     setStatus((current) => (current === "error" ? current : "idle"));
     setStatusText("Briefing ended. Tap to start again whenever you're ready.");
   }
@@ -515,7 +920,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
   function requestAssistantResponse(instructions: string) {
     sendRealtimeEvent({
       type: "response.create",
-      response: { modalities: ["audio", "text"], instructions }
+      response: { instructions }
     });
   }
 
@@ -555,7 +960,14 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       setOrbMinimised(true);
       // Generate the new turn ID *outside* setTurns to avoid double-invoke issues
       const newId = nextId(LIVE_PREFIX);
+      const responseId = responseIdFromEvent(event);
       liveTurnIdRef.current = newId;
+      liveResponseIdRef.current = responseId || null;
+      if (responseId) turnIdsByResponseIdRef.current.set(responseId, newId);
+      revealQueuesRef.current.set(newId, "");
+      receivedTextRef.current.set(newId, "");
+      revealedTextRef.current.set(newId, "");
+      completedTurnIdsRef.current.delete(newId);
       setTurns((current) => [
         ...current,
         { id: newId, role: "assistant", text: "" }
@@ -570,8 +982,11 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       type === "response.text.delta"
     ) {
       const delta = typeof event.delta === "string" ? event.delta : "";
-      const id = liveTurnIdRef.current;
-      if (id && delta) appendLiveDelta(id, delta);
+      const id = turnIdForEvent(event);
+      if (id && delta) {
+        appendLiveDelta(id, delta);
+        attachPendingVisualToTurn(id);
+      }
       return;
     }
 
@@ -582,13 +997,21 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       type === "response.output_text.done"
     ) {
       const finalText = typeof event.transcript === "string" ? event.transcript : "";
-      const id = liveTurnIdRef.current;
+      const id = turnIdForEvent(event);
       if (id && finalText) finaliseLiveTurn(id, finalText);
-      liveTurnIdRef.current = null;
       return;
     }
 
     if (type === "response.done") {
+      const responseId = responseIdFromEvent(event);
+      const id = turnIdForEvent(event);
+      if (id) {
+        attachPendingVisualToTurn(id);
+        completedTurnIdsRef.current.add(id);
+        finishLiveTurnIfRevealed(id);
+      }
+      if (responseId) turnIdsByResponseIdRef.current.delete(responseId);
+      if (responseId && liveResponseIdRef.current === responseId) liveResponseIdRef.current = null;
       setStatus("connected");
       setStatusText("I'm listening — ask me anything about this client.");
     }
@@ -611,7 +1034,8 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
 
     try {
       const response = await queryMemory(query);
-      attachVisualToLastAssistant(response);
+      pendingVisualRef.current = response;
+      pendingVisualSourceTurnIdRef.current = liveTurnIdRef.current;
       sendFunctionOutput(functionCall.callId, response);
       requestAssistantResponse(
         "Answer Sarah from the query_client_memory tool output. If displayMode is missing_info, mention the suggested next step."
@@ -631,8 +1055,18 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
     });
   }
 
+  const sectionClass = fillViewport
+    ? "surface-enter flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.9rem] border border-line/80 bg-panel shadow-diffusion"
+    : "surface-enter sticky top-3 flex max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-[1.9rem] border border-line/80 bg-panel shadow-diffusion";
+  const headerClass = fillViewport
+    ? "flex shrink-0 items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-5"
+    : "flex items-center justify-between gap-3 p-5 sm:p-8";
+  const largeOrbClass = fillViewport
+    ? "flex shrink-0 flex-col items-center px-5 pb-3 pt-1 text-center sm:px-8"
+    : "flex flex-col items-center px-5 pb-4 pt-2 text-center sm:px-8";
+
   return (
-    <section className="surface-enter relative rounded-[1.9rem] border border-line/80 bg-panel shadow-diffusion">
+    <section className={sectionClass}>
       {/* Floating minimised orb — fixed to top-right of the section */}
       {orbMinimised && (
         <div className="absolute right-4 top-4 z-20 flex flex-col items-center gap-1">
@@ -681,7 +1115,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       )}
 
       {/* Header row */}
-      <div className="flex items-center justify-between gap-3 p-5 sm:p-8">
+      <div className={headerClass}>
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
           Voice briefing
         </p>
@@ -692,14 +1126,16 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
         )}
       </div>
 
+      {showContextBoard ? <BriefingContextBoard context={context} /> : null}
+
       {/* Large orb — shown until the agent first responds */}
       {!orbMinimised && (
-        <div className="flex flex-col items-center px-5 pb-6 text-center sm:px-8">
+        <div className={largeOrbClass}>
           <button
             type="button"
             onClick={() => (connected ? stopRealtimeBriefing() : void startRealtimeBriefing())}
             aria-label={connected ? "Stop briefing" : "Start briefing"}
-            className="focus-ring pressable relative flex h-40 w-40 items-center justify-center rounded-full sm:h-48 sm:w-48"
+            className="focus-ring pressable relative flex h-28 w-28 items-center justify-center rounded-full sm:h-36 sm:w-36"
           >
             {connected && (
               <>
@@ -708,7 +1144,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
               </>
             )}
             <span
-              className={`relative flex h-32 w-32 items-center justify-center rounded-full border text-paper transition-colors sm:h-36 sm:w-36 ${
+              className={`relative flex h-24 w-24 items-center justify-center rounded-full border text-paper transition-colors sm:h-28 sm:w-28 ${
                 status === "error"
                   ? "border-rose/40 bg-rose"
                   : connected
@@ -734,8 +1170,8 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
             </span>
           </button>
 
-          <p className="mt-6 text-lg font-semibold tracking-tight text-ink">{phaseLabel}</p>
-          <p className="mt-2 max-w-md text-sm leading-6 text-muted">{statusText}</p>
+          <p className="mt-3 text-base font-semibold tracking-tight text-ink">{phaseLabel}</p>
+          <p className="mt-1 max-w-md text-sm leading-6 text-muted">{statusText}</p>
 
           {connected && (
             <button
@@ -753,24 +1189,25 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
       {/* Streaming output area — shows agent responses with text + rich visual inline */}
       <div
         ref={feedRef}
-        className="max-h-[65vh] min-h-[12rem] overflow-y-auto px-5 pb-8 sm:px-8"
+        onScroll={handleFeedScroll}
+        className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-8"
         style={{ scrollbarWidth: "thin" }}
       >
         {turns.length === 0 && !queryingMemory ? (
           /* Empty state — shown before agent speaks */
-          <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+          <div className="flex h-20 flex-col items-center justify-center gap-2 text-center">
             <p className="text-sm text-muted">
               {status === "connecting"
                 ? "Connecting to your briefing assistant…"
                 : status === "error"
                   ? "Something went wrong. Try tapping the mic again."
-                  : "Tap the microphone to start. Agent responses will appear here."}
+                  : "The opening brief will appear here as it is spoken."}
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {turns.map((turn, index) => {
-              const isLast = index === turns.length - 1;
+          <div className="grid content-start gap-4">
+            {visibleTurns.map((turn, index) => {
+              const isLast = index === visibleTurns.length - 1;
               const isLiveTurn = turn.id === liveTurnIdRef.current;
 
               if (turn.role === "advisor") {
@@ -821,7 +1258,11 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
                       <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
                         Latest answer
                       </p>
-                      <AdaptiveMemoryDisplay response={turn.visual} variant="hero" />
+                      <ProgressiveAdaptiveMemoryDisplay
+                        key={visualResponseKey(turn.visual)}
+                        response={turn.visual}
+                        onRevealStep={scrollFeedToBottom}
+                      />
                     </div>
                   ) : null}
                 </div>
@@ -895,6 +1336,9 @@ function buildRealtimeInstructions(context: ClientContext) {
     "If the tool returns missing_info, say what is missing and suggest the next step from the tool output.",
     "Keep answers concise, specific, and action-oriented.",
     "Never speak to or message the client directly.",
+    "The briefing page no longer opens a separate Q&A-only view. Treat suggestedQuestions, open actions, salient memories, and relationship graph context as built-in Q&A preparation for the voice briefing.",
+    "For the opening briefing, include the client, meeting objective, one personal opener, unresolved/open items, and the top one or two useful questions Sarah should be ready to ask.",
+    "Do not tell Sarah to open another view for Q&A context.",
     "",
     "CRITICAL VISUAL DIRECTIVE FOR TEXT OUTPUT:",
     "Your audio output must remain conversational, professional, and descriptive.",
@@ -935,6 +1379,9 @@ function buildRealtimeInstructions(context: ClientContext) {
     "```",
     "Prepared opening briefing:",
     context.briefing,
+    "",
+    "Built-in Q&A preparation prompts:",
+    JSON.stringify(context.suggestedQuestions, null, 2),
     "",
     "Client memory context JSON:",
     JSON.stringify(

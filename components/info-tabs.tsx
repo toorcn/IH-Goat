@@ -24,14 +24,22 @@ export type InfoTab = {
  */
 export function InfoTabs({
   tabs,
-  attentionSignal
+  attentionSignal,
+  floatingContent,
+  onActiveChange
 }: {
   tabs: InfoTab[];
   attentionSignal?: { tabId: string; nonce: number };
+  floatingContent?: ReactNode;
+  onActiveChange?: (active: boolean) => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const handledAttentionNonceRef = useRef(0);
   const active = tabs.find((tab) => tab.id === activeId) ?? null;
+
+  useEffect(() => {
+    onActiveChange?.(Boolean(activeId));
+  }, [activeId, onActiveChange]);
 
   // Auto-surface the tab a parent flags. nonce changes each time, so repeated
   // attention on the same tab still re-opens it.
@@ -55,31 +63,38 @@ export function InfoTabs({
       <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 sm:px-6 sm:pb-4 lg:px-8">
         <div className="mx-auto w-full max-w-[1400px]">
           {active ? (
-            <div className="caption-enter mb-2 max-h-[64vh] overflow-auto rounded-[1.6rem] border border-line/80 bg-panel/95 p-4 shadow-diffusion backdrop-blur-xl sm:p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
-                  {active.label}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveId(null)}
-                  aria-label="Close panel"
-                  className="focus-ring pressable inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-paper text-muted transition-colors hover:text-ink"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+            <>
+              {floatingContent ? <div className="caption-enter mb-2">{floatingContent}</div> : null}
+              <div
+                className={`caption-enter mb-2 overflow-auto rounded-[1.6rem] border border-line/80 bg-panel/95 p-4 shadow-diffusion backdrop-blur-xl sm:p-5 ${
+                  floatingContent ? "max-h-[52vh] sm:max-h-[56vh]" : "max-h-[64vh]"
+                }`}
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
+                    {active.label}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveId(null)}
+                    aria-label="Close panel"
+                    className="focus-ring pressable inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-paper text-muted transition-colors hover:text-ink"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                {active.content}
               </div>
-              {active.content}
-            </div>
+            </>
           ) : null}
 
           <div className="grid grid-flow-col auto-cols-fr items-stretch gap-1 rounded-[1.4rem] border border-line/80 bg-panel/85 p-1.5 shadow-diffusion backdrop-blur-xl">
-            {tabs.map((tab) => {
+            {tabs.map((tab, index) => {
               const isActive = tab.id === activeId;
               const showBadge = typeof tab.badge === "number" && tab.badge > 0;
               return (
                 <button
-                  key={tab.id}
+                  key={`${tab.id}-${index}`}
                   type="button"
                   onClick={() => setActiveId(isActive ? null : tab.id)}
                   aria-pressed={isActive}

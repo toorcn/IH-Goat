@@ -20,6 +20,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing need" }, { status: 400 });
   }
 
-  const result = await recommendClientPartners(body.clientId, need, body.reason ?? "", body.limit ?? 3);
+  const result = await recommendClientPartners(body.clientId, need, body.reason ?? "", body.limit ?? 1);
   return NextResponse.json(result);
 }

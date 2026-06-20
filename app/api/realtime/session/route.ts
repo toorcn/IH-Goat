@@ -222,7 +222,7 @@ function buildLiveCompanionTools() {
     {
       type: "function",
       name: "capture_useful_memory",
-      description: "Capture useful client information worth saving for future meetings. Only call for durable facts, commitments, concerns, goals, life events, people, emotional cues, or referrals.",
+      description: "Capture useful client information worth saving for future meetings. Only call for durable, high-confidence facts: commitments, material concerns, explicit goals, life events, people, referrals, or concrete follow-ups. Do not capture greetings, generic positive mood, identity checks, or topic recaps.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -243,7 +243,7 @@ function buildLiveCompanionTools() {
           },
           summary: { type: "string", minLength: 8, maxLength: 280 },
           sourceSnippet: { type: "string", minLength: 4, maxLength: 320 },
-          confidence: { type: "number", minimum: 0, maximum: 1 },
+          confidence: { type: "number", minimum: 0.72, maximum: 1 },
           proposedGraphMutation: { type: "string", maxLength: 500 }
         }
       }

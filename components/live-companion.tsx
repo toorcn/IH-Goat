@@ -35,6 +35,8 @@ const MIN_TURNS_BEFORE_SUGGESTIONS = 3;
 const MIN_WORDS_BEFORE_SUGGESTIONS = 18;
 const SUGGESTION_COOLDOWN_MS = 20000;
 const PARTNER_COOLDOWN_MS = 30000;
+const CAPTURE_MIN_CONFIDENCE = 0.72;
+const EMOTIONAL_CAPTURE_MIN_CONFIDENCE = 0.85;
 const MEMORY_CATEGORIES: MemoryCategory[] = [
   "Life Event",
   "Emotional Cue",
@@ -252,6 +254,87 @@ function shouldAcceptPartnerLookup(
   return { accepted: true, reason: "" };
 }
 
+function hasStrongEmotionalSignal(value: string) {
+  return /\b(worried|concerned|anxious|stressed|overwhelmed|hesitant|frustrated|upset|relieved|excited|uncertain|afraid|nervous|confident|uncomfortable)\b/i.test(
+    value
+  );
+}
+
+function isGenericPositiveGreeting(value: string) {
+  const normalized = normalizedSuggestionText(value);
+  return /\b(i am|i m|i'm|doing|feeling|am)\s+(good|fine|okay|ok|well|great)\b/.test(normalized) ||
+    /\b(what about you|how are you|how about you|nice to meet|good morning|good afternoon|good evening)\b/.test(normalized);
+}
+
+function isGenericTopicRecap(value: string) {
+  const normalized = normalizedSuggestionText(value);
+  const recap =
+    /\b(last time|previously|prior|before|brought the conversation back|we were talking|we ve been talking|we have been talking|we discussed|for review)\b/.test(
+      normalized
+    );
+  const durableSignal =
+    /\b(i|we|my|our)\s+(want|need|plan|intend|decided|committed|promised|worry|worries|am worried|are worried|haven t|have not|can t|cannot|would like)\b/.test(
+      normalized
+    ) ||
+    /\b(new|changed|accepted|retired|retirement|married|divorced|hospital|diagnosed|passed away|business sale|property purchase|will update|lawyer|doctor|tax advisor|specialist|introduction|referral)\b/.test(
+      normalized
+    );
+  return recap && !durableSignal;
+}
+
+function hasDurableCaptureSignal(memory: ExtractedMemory) {
+  const text = `${memory.summary} ${memory.sourceSnippet}`;
+  if (memory.category === "Emotional Cue") return hasStrongEmotionalSignal(text);
+  if (memory.category === "Referral Opportunity") return hasPartnerNeedSignal(text);
+  if (memory.category === "Relationship Mention") {
+    return /\b(wife|husband|spouse|partner|daughter|son|child|children|family|brother|sister|mother|father|business partner|executor|beneficiary)\b/i.test(
+      text
+    );
+  }
+  if (memory.category === "Promise/Commitment" || memory.category === "Follow-Up Action") {
+    return /\b(will|send|follow up|introduce|prepare|review|call|email|share|schedule|confirm|commit|promise|next step)\b/i.test(text);
+  }
+  if (memory.category === "Goal/Objective") {
+    return /\b(want|need|goal|objective|priority|plan|intend|hope|would like|retire|retirement|buy|sell|save|fund|support|transfer|protect|reduce|grow)\b/i.test(
+      text
+    );
+  }
+  if (memory.category === "Unresolved Concern") {
+    return /\b(worried|concerned|hard|stuck|issue|problem|unsure|not sure|haven't|have not|can't|cannot|unresolved|block|difficult)\b/i.test(
+      text
+    );
+  }
+  if (memory.category === "Life Event") {
+    return /\b(new|accepted|graduated|married|divorced|born|moved|retired|retiring|diagnosed|hospital|passed away|started|sold|bought)\b/i.test(
+      text
+    );
+  }
+  return true;
+}
+
+function shouldAcceptCapturedMemory(memory: ExtractedMemory, existing: ExtractedMemory[]) {
+  const combinedText = `${memory.summary} ${memory.sourceSnippet}`;
+  if (memory.confidence < CAPTURE_MIN_CONFIDENCE) {
+    return { accepted: false, reason: "Capture confidence is too low." };
+  }
+  if (memory.category === "Emotional Cue" && memory.confidence < EMOTIONAL_CAPTURE_MIN_CONFIDENCE) {
+    return { accepted: false, reason: "Emotional cue is too weak to save." };
+  }
+  if (isOpeningSmallTalk(memory.sourceSnippet) || isGenericPositiveGreeting(combinedText)) {
+    return { accepted: false, reason: "Greeting or small talk is not notable client memory." };
+  }
+  if (isGenericTopicRecap(combinedText)) {
+    return { accepted: false, reason: "Generic topic recap is not a durable client fact." };
+  }
+  if (!hasDurableCaptureSignal(memory)) {
+    return { accepted: false, reason: "Capture lacks a durable advisor-relevant fact." };
+  }
+  if (existing.some((item) => signatureOf(item) === signatureOf(memory))) {
+    return { accepted: false, reason: "Similar memory already captured in this session." };
+  }
+  return { accepted: true, reason: "" };
+}
+
 function buildLiveRealtimeInstructions(context: ClientContext) {
   return [
     "You are an advisor-only live meeting conductor for a financial advisor.",
@@ -263,8 +346,9 @@ function buildLiveRealtimeInstructions(context: ClientContext) {
     "Use suggest_follow_up_question only after at least three substantive turns and a concrete planning, financial, family, referral, concern, goal, or commitment signal.",
     "Do not call suggest_follow_up_question for greetings, identity checks, call routing, or generic confirmations such as 'hello' or 'is this Mr Tan'.",
     "At most one suggestion every 20 seconds. Prefer no suggestion over a generic one.",
-    "Use capture_useful_memory for durable facts worth saving: life events, emotional cues, unresolved concerns, goals, promises, relationship mentions, referrals, and follow-ups.",
-    "Only capture facts actually said in the conversation. Use the sourceSnippet field for the supporting quote.",
+    "Use capture_useful_memory only for durable, advisor-relevant facts worth remembering across future meetings: concrete life events, material concerns, clear goals, explicit promises, new relationship facts, referral opportunities, and follow-up actions.",
+    "Do not capture greetings, wellbeing small talk, generic positive mood, call routing, identity checks, or generic topic recaps such as 'we talked about insurance last time'.",
+    "Only capture facts actually said in the conversation. Use the sourceSnippet field for the supporting quote and keep confidence high.",
     "Captured memory is auto-saved; do not ask for permission before calling the capture tool when the fact is useful and new.",
     "Small routing context:",
     JSON.stringify({
@@ -428,6 +512,7 @@ export function LiveCompanion({
   const [savedSignatures, setSavedSignatures] = useState<Set<string>>(() => new Set());
   const [savingSignatures, setSavingSignatures] = useState<Set<string>>(() => new Set());
   const [attentionSignal, setAttentionSignal] = useState<{ tabId: string; nonce: number }>({ tabId: "", nonce: 0 });
+  const [transcriptPopupVisible, setTranscriptPopupVisible] = useState(false);
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
@@ -635,7 +720,7 @@ export function LiveCompanion({
             clientId: context.client.id,
             need,
             reason: typeof toolCall.args.reason === "string" ? toolCall.args.reason : "",
-            limit: typeof toolCall.args.limit === "number" ? toolCall.args.limit : 3
+            limit: 1
           })
         });
         const result = (await response.json()) as LivePartnerRecommendationResponse;
@@ -720,6 +805,11 @@ export function LiveCompanion({
         confidence: clampConfidence(toolCall.args.confidence),
         proposedGraphMutation: typeof toolCall.args.proposedGraphMutation === "string" ? toolCall.args.proposedGraphMutation : ""
       };
+      const captureAcceptance = shouldAcceptCapturedMemory(memory, analysis?.extracted ?? []);
+      if (!captureAcceptance.accepted) {
+        sendToolOutput(toolCall.callId, { accepted: false, reason: captureAcceptance.reason });
+        return;
+      }
       setAnalysis((current) => ({
         source: "openai",
         attributions: current?.attributions ?? [],
@@ -740,7 +830,7 @@ export function LiveCompanion({
         reason: saveResult.reason
       });
     }
-  }, [analysis?.suggestions, context, livePartnerEntries, saveMemory, sendToolOutput]);
+  }, [analysis?.extracted, analysis?.suggestions, context, livePartnerEntries, saveMemory, sendToolOutput]);
 
   const handleRealtimeEvent = useCallback(
     (raw: string) => {
@@ -915,7 +1005,7 @@ export function LiveCompanion({
   const suggestions = analysis?.suggestions ?? [];
   const clientMemories = context.memories;
   const searchResultCount = liveSearches.reduce((count, search) => count + search.results.length, 0);
-  const partnerResultCount = livePartnerEntries.reduce((count, entry) => count + entry.results.length, 0);
+  const partnerResultCount = livePartnerEntries.reduce((count, entry) => count + Math.min(entry.results.length, 1), 0);
   const relevantMemories = useMemo(() => {
     if (!analysis) return [];
     return analysis.relevant
@@ -980,12 +1070,12 @@ export function LiveCompanion({
                 <div key={entry.id} className="rounded-[1.1rem] border border-line bg-paper p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={entry.source === "neo4j" ? "signal" : "amber"}>{entry.source}</Badge>
-                    <Badge tone="cobalt">Partner</Badge>
+                    <Badge tone="cobalt">Best partner</Badge>
                     <span className="text-xs font-medium text-muted">{entry.need}</span>
                   </div>
                   {entry.reason ? <p className="mt-1 text-xs leading-5 text-muted">{entry.reason}</p> : null}
                   <div className="mt-2 space-y-2">
-                    {entry.results.map((partner) => (
+                    {entry.results.slice(0, 1).map((partner) => (
                       <PartnerRecommendationCard key={`${entry.id}-${partner.id}`} partner={partner} />
                     ))}
                   </div>
@@ -1040,11 +1130,11 @@ export function LiveCompanion({
           {extracted.length === 0 ? (
             <EmptyState>Notable facts saved from this meeting appear here with save status.</EmptyState>
           ) : (
-            extracted.map((memory) => {
+            extracted.map((memory, index) => {
               const signature = signatureOf(memory);
               return (
                 <CapturedCard
-                  key={signature}
+                  key={memory.id || `${signature}-${index}`}
                   memory={memory}
                   saved={savedSignatures.has(signature)}
                   saving={savingSignatures.has(signature)}
@@ -1119,13 +1209,22 @@ export function LiveCompanion({
           </p>
         ) : null}
 
-        <LiveCaptionStage turns={turns} context={context} status={status} connected={connected} />
+        {transcriptPopupVisible ? null : (
+          <LiveCaptionStage turns={turns} context={context} status={status} connected={connected} />
+        )}
       </section>
 
       {/* Live insights ride in the bottom dock so they are one tap away — never a scroll —
           and auto-pop the relevant panel when something new needs attention. */}
       {saveToast ? <SaveToastNotice toast={saveToast} /> : null}
-      <InfoTabs attentionSignal={attentionSignal} tabs={[...insightTabs, ...extraTabs]} />
+      <InfoTabs
+        attentionSignal={attentionSignal}
+        floatingContent={
+          <DockLiveTranscript turns={turns} context={context} status={status} connected={connected} />
+        }
+        onActiveChange={setTranscriptPopupVisible}
+        tabs={[...insightTabs, ...extraTabs]}
+      />
     </>
   );
 }
@@ -1163,6 +1262,53 @@ function LiveCaptionStage({
         </div>
         <div className="relative flex min-h-[64px] items-end justify-center">
           <FloatingLiveCaptions turns={turns} context={context} active={active} status={status} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DockLiveTranscript({
+  turns,
+  context,
+  status,
+  connected
+}: {
+  turns: TranscriptTurn[];
+  context: ClientContext;
+  status: RealtimeStatus;
+  connected: boolean;
+}) {
+  const row = latestTurnCaption(turns);
+  const active = connected || status === "connecting";
+
+  return (
+    <div className="relative z-10 rounded-[1.25rem] border border-line/80 bg-white/95 p-3 shadow-[0_18px_60px_-24px_rgba(31,45,38,0.45)] ring-1 ring-white/80 backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+              status === "error" ? "bg-rose" : active ? "bg-signal" : "bg-muted"
+            }`}
+          />
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted">
+            Live transcript
+          </p>
+        </div>
+        <Badge tone={status === "error" ? "rose" : active ? "signal" : "neutral"}>
+          {status === "connecting" ? "connecting" : connected ? "live" : "idle"}
+        </Badge>
+      </div>
+
+      <div className="mt-2 flex min-w-0 items-start gap-2">
+        {row ? <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${captionSpeakerDotClass(row.speaker)}`} /> : null}
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-muted">
+            {row ? captionSpeakerLabel(row.speaker, context) : active ? "Listening" : "No transcript yet"}
+          </p>
+          <p className="mt-0.5 max-h-12 overflow-hidden text-sm font-semibold leading-5 text-ink">
+            {row?.text ?? (active ? "Captions will stay visible here while the insight panel is open." : "Start capture to see live captions.")}
+          </p>
         </div>
       </div>
     </div>
@@ -1314,10 +1460,8 @@ function CaptionPill({
   textBoxRef?: RefObject<HTMLDivElement | null>;
   pinnedWidth?: number | null;
 }) {
-  const label =
-    row.speaker === "advisor" ? context.advisor.name : row.speaker === "client" ? context.client.name : "Speaker";
-  const dotClass =
-    row.speaker === "advisor" ? "bg-cobalt" : row.speaker === "client" ? "bg-signal" : "bg-muted";
+  const label = captionSpeakerLabel(row.speaker, context);
+  const dotClass = captionSpeakerDotClass(row.speaker);
 
   return (
     <div
@@ -1336,6 +1480,14 @@ function CaptionPill({
       </div>
     </div>
   );
+}
+
+function captionSpeakerLabel(speaker: CaptionSpeaker, context: ClientContext) {
+  return speaker === "advisor" ? context.advisor.name : speaker === "client" ? context.client.name : "Speaker";
+}
+
+function captionSpeakerDotClass(speaker: CaptionSpeaker) {
+  return speaker === "advisor" ? "bg-cobalt" : speaker === "client" ? "bg-signal" : "bg-muted";
 }
 
 function IdleCaption({ status }: { status: RealtimeStatus }) {
