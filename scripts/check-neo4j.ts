@@ -1,5 +1,7 @@
 import neo4j from "neo4j-driver";
+import { client } from "../lib/demo-data";
 import { getNeo4jDatabaseConfig, loadLocalEnv } from "./load-local-env";
+import { getNeo4jGraphHealth } from "./neo4j-schema";
 
 loadLocalEnv();
 
@@ -45,6 +47,14 @@ async function main() {
       serverInfo,
       ok: result.records[0]?.get("ok")?.toString?.() ?? result.records[0]?.get("ok")
     });
+
+    const health = await withTimeout(
+      getNeo4jGraphHealth(driver, client.id),
+      15000,
+      "Neo4j graph health query timed out after 15s."
+    );
+    console.log("Graph health");
+    console.log(health);
   } finally {
     await driver.close();
   }

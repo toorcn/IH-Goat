@@ -66,7 +66,19 @@ export type ActionItem = {
 export type GraphNode = {
   id: string;
   label: string;
-  type: "Advisor" | "Client" | "Person" | "Specialist" | "ReferralOpportunity";
+  type:
+    | "Advisor"
+    | "Client"
+    | "Person"
+    | "Specialist"
+    | "ReferralOpportunity"
+    | "Meeting"
+    | "Memory"
+    | "LifeEvent"
+    | "Concern"
+    | "Objective"
+    | "Promise"
+    | "Action";
   note: string;
 };
 

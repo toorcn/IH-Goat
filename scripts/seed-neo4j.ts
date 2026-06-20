@@ -9,6 +9,7 @@ import {
 } from "../lib/demo-data";
 import type { MemoryCategory } from "../lib/types";
 import { getNeo4jDatabaseConfig, loadLocalEnv } from "./load-local-env";
+import { ensureNeo4jSchema, getNeo4jGraphHealth } from "./neo4j-schema";
 
 loadLocalEnv();
 
@@ -27,6 +28,8 @@ async function main() {
     const serverInfo = await driver.getServerInfo(databaseConfig);
     console.log("Connection established");
     console.log(serverInfo);
+    const schemaApplied = await ensureNeo4jSchema(driver);
+    console.log(`Neo4j schema ready (${schemaApplied.length} constraints/indexes checked).`);
 
     await executeWrite(driver, "MATCH (n) WHERE n.id IN $ids DETACH DELETE n", {
       ids: demoNodeIds()
@@ -89,8 +92,11 @@ async function main() {
             mem.lastConfirmedAt = $memory.lastConfirmedAt,
             mem.salience = $memory.salience
         MERGE (c)-[:HAS_MEMORY]->(mem)
+        WITH mem
+        MATCH (meeting:Meeting {id: $sourceMeetingId})
+        MERGE (meeting)-[:PRODUCED]->(mem)
         `,
-        { memory }
+        { memory, sourceMeetingId: sourceMeetingIdForMemory(memory.source) }
       );
       const typed = typedMemoryMutation(memory.category);
       if (typed) {
@@ -115,6 +121,9 @@ async function main() {
             act.status = $action.status,
             act.draftText = $action.draftText
         MERGE (c)-[:HAS_ACTION]->(act)
+        WITH act
+        MATCH (meeting:Meeting {id: $action.meetingId})
+        MERGE (act)-[:FOLLOWS_FROM]->(meeting)
         `,
         { action }
       );
@@ -200,7 +209,9 @@ async function main() {
       { clientId: client.id, spouse, daughter, referral, evelyn, marcus, ong, businessReferral }
     );
 
+    const health = await getNeo4jGraphHealth(driver, client.id);
     console.log("Seeded Neo4j demo graph for Advisors' Advisor.");
+    console.log("Graph health", health);
   } finally {
     await driver.close();
   }
@@ -231,6 +242,11 @@ function demoNodeIds() {
 function typedSeedNodeId(memoryId: string) {
   if (memoryId === "memory-lawyer-request") return "referral-estate";
   if (memoryId === "memory-ong-business-contact") return "person-ong";
+  if (memoryId === "memory-jia-nus") return "life-jia-nus";
+  if (memoryId === "memory-will-planning") return "concern-will-planning";
+  if (memoryId === "memory-policy-hesitation") return "concern-policy-renewal";
+  if (memoryId === "memory-family-transition") return "objective-family-transition";
+  if (memoryId === "memory-guide-promise") return "promise-guide";
   return `${memoryId}-typed`;
 }
 
@@ -321,7 +337,31 @@ function typedMemoryMutation(category: MemoryCategory) {
     };
   }
 
+  if (category === "Relationship Mention") {
+    return {
+      query: `
+      MATCH (c:Client {id: $memory.clientId})
+      MATCH (mem:Memory {id: $memory.id})
+      MERGE (typed:Person {id: $typedId})
+      SET typed.name = $memory.title,
+          typed.label = $memory.title,
+          typed.note = $memory.summary,
+          typed.sourceSnippet = $memory.sourceSnippet,
+          typed.confidence = $memory.confidence
+      MERGE (c)-[rel:RELATED_TO {relationship: 'mentioned'}]->(typed)
+      SET rel.label = 'mentioned',
+          rel.id = $memory.id + '-relationship'
+      MERGE (mem)-[:MATERIALIZES_AS]->(typed)
+      `
+    };
+  }
+
   return null;
+}
+
+function sourceMeetingIdForMemory(source: string) {
+  if (source.includes("2026-04-08")) return "meeting-2026-04-08-tan";
+  return "meeting-2026-06-20-tan";
 }
 
 function executeWrite(driver: Driver, query: string, parameters: Record<string, unknown>) {

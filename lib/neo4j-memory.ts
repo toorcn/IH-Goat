@@ -64,7 +64,16 @@ export async function getClientContextWithMemoryLayer(clientId: string): Promise
         MATCH (a:Advisor)-[:MANAGES]->(:Client {id: $clientId})
         RETURN a AS node
         UNION
-        MATCH (:Client {id: $clientId})-[:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(node)
+        MATCH (:Client {id: $clientId})-[:HAS_MEETING|HAS_MEMORY|HAS_LIFE_EVENT|HAS_CONCERN|HAS_OBJECTIVE|HAS_PROMISE|HAS_ACTION|RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(node)
+        RETURN node
+        UNION
+        MATCH (:Client {id: $clientId})-[:HAS_MEMORY]->(:Memory)-[:MATERIALIZES_AS]->(node)
+        RETURN node
+        UNION
+        MATCH (:Client {id: $clientId})-[:HAS_MEETING]->(:Meeting)-[:PRODUCED|CREATED]->(node)
+        RETURN node
+        UNION
+        MATCH (:Client {id: $clientId})-[:HAS_ACTION]->(:Action)-[:FOLLOWS_FROM]->(node)
         RETURN node
         UNION
         MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]->(:ReferralOpportunity)-[:MATCHES_SPECIALIST|INVOLVES]->(node)
@@ -81,7 +90,16 @@ export async function getClientContextWithMemoryLayer(clientId: string): Promise
         MATCH (source:Advisor)-[r:MANAGES]->(target:Client {id: $clientId})
         RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
         UNION
-        MATCH (source:Client {id: $clientId})-[r:RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(target)
+        MATCH (source:Client {id: $clientId})-[r:HAS_MEETING|HAS_MEMORY|HAS_LIFE_EVENT|HAS_CONCERN|HAS_OBJECTIVE|HAS_PROMISE|HAS_ACTION|RELATED_TO|HAS_REFERRAL_OPPORTUNITY]->(target)
+        RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+        UNION
+        MATCH (:Client {id: $clientId})-[:HAS_MEMORY]->(source:Memory)-[r:MATERIALIZES_AS]->(target)
+        RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+        UNION
+        MATCH (:Client {id: $clientId})-[:HAS_MEETING]->(source:Meeting)-[r:PRODUCED|CREATED]->(target)
+        RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
+        UNION
+        MATCH (:Client {id: $clientId})-[:HAS_ACTION]->(source:Action)-[r:FOLLOWS_FROM]->(target:Meeting)
         RETURN source.id AS source, target.id AS target, type(r) AS type, r.label AS label, r.id AS id
         UNION
         MATCH (:Client {id: $clientId})-[:HAS_REFERRAL_OPPORTUNITY]->(source:ReferralOpportunity)-[r:MATCHES_SPECIALIST|INVOLVES]->(target)
@@ -185,6 +203,80 @@ export async function queryClientMemory(clientId: string, query: string) {
       results: context.memories.filter((memory) =>
         `${memory.title} ${memory.summary} ${memory.sourceSnippet}`.toLowerCase().includes(normalized)
       )
+    };
+  }
+}
+
+export async function getMemoryLayerDiagnostics(clientId: string) {
+  const graphDriver = getDriver();
+  if (!graphDriver) {
+    return {
+      configured: false,
+      source: "demo",
+      clientId,
+      message: "Neo4j environment variables are not configured."
+    };
+  }
+
+  try {
+    const result = await graphDriver.executeQuery(
+      `
+      MATCH (c:Client {id: $clientId})
+      CALL {
+        WITH c
+        MATCH (c)-[r]->()
+        RETURN count(r) AS outgoingEdges
+      }
+      CALL {
+        WITH c
+        MATCH (c)-[:HAS_MEMORY]->(m:Memory)
+        RETURN count(m) AS memories,
+               count { (m)-[:MATERIALIZES_AS]->() } AS materializedMemories,
+               count { (m)<-[:PRODUCED]-(:Meeting) } AS meetingLinkedMemories
+      }
+      CALL {
+        WITH c
+        MATCH (c)-[:HAS_LIFE_EVENT|HAS_CONCERN|HAS_OBJECTIVE|HAS_PROMISE|HAS_ACTION|HAS_REFERRAL_OPPORTUNITY|RELATED_TO]->(typed)
+        RETURN count(typed) AS typedNeighbors
+      }
+      RETURN c.id AS clientId,
+             outgoingEdges,
+             memories,
+             materializedMemories,
+             meetingLinkedMemories,
+             typedNeighbors
+      `,
+      { clientId },
+      getQueryConfig(neo4j.routing.READ)
+    );
+
+    const record = result.records[0];
+    if (!record) {
+      return {
+        configured: true,
+        source: "neo4j",
+        clientId,
+        exists: false
+      };
+    }
+
+    return {
+      configured: true,
+      source: "neo4j",
+      clientId: record.get("clientId"),
+      exists: true,
+      outgoingEdges: neo4jNumber(record.get("outgoingEdges")),
+      memories: neo4jNumber(record.get("memories")),
+      materializedMemories: neo4jNumber(record.get("materializedMemories")),
+      meetingLinkedMemories: neo4jNumber(record.get("meetingLinkedMemories")),
+      typedNeighbors: neo4jNumber(record.get("typedNeighbors"))
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      source: "demo",
+      clientId,
+      error: error instanceof Error ? error.message : "Neo4j diagnostics failed."
     };
   }
 }
@@ -555,9 +647,24 @@ function graphNodeToItem(labels: string[], properties: Record<string, unknown>):
 
   return {
     id: stringProp("id", `neo4j-node-${crypto.randomUUID()}`),
-    label: stringProp("label", stringProp("name", stringProp("title", "Graph node"))),
+    label: stringProp(
+      "label",
+      stringProp("name", stringProp("title", type === "Meeting" ? stringProp("startsAt", "Meeting") : "Graph node"))
+    ),
     type,
-    note: stringProp("note", stringProp("notes", stringProp("reason")))
+    note: stringProp(
+      "note",
+      stringProp(
+        "notes",
+        stringProp(
+          "reason",
+          stringProp(
+            "summary",
+            stringProp("sourceSnippet", stringProp("objective", stringProp("need", stringProp("draftText"))))
+          )
+        )
+      )
+    )
   };
 }
 
@@ -585,5 +692,20 @@ function graphNodeTypeFromLabels(labels: string[]): GraphNode["type"] {
   if (labels.includes("Client")) return "Client";
   if (labels.includes("Specialist")) return "Specialist";
   if (labels.includes("ReferralOpportunity")) return "ReferralOpportunity";
+  if (labels.includes("Meeting")) return "Meeting";
+  if (labels.includes("Memory")) return "Memory";
+  if (labels.includes("LifeEvent")) return "LifeEvent";
+  if (labels.includes("Concern")) return "Concern";
+  if (labels.includes("Objective")) return "Objective";
+  if (labels.includes("Promise")) return "Promise";
+  if (labels.includes("Action")) return "Action";
   return "Person";
+}
+
+function neo4jNumber(value: unknown) {
+  if (typeof value === "number") return value;
+  if (value && typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+    return value.toNumber();
+  }
+  return Number(value ?? 0);
 }

@@ -48,9 +48,17 @@ POST /api/meetings/[meetingId]/transcribe
 Seed Neo4j when a local database is available:
 
 ```bash
+npm run schema:neo4j
 npm run check:neo4j
 npm run seed:neo4j
 ```
 
+`schema:neo4j` creates id uniqueness constraints, lookup indexes, and the full-text
+memory index. `seed:neo4j` also runs the schema step before loading the Sarah/Mr. Tan
+memory graph, then prints graph-health counts for materialized memories and typed
+neighbors. The app also exposes `GET /api/neo4j/health?clientId=client-tan` for a
+read-only runtime health check.
+
 The app still renders without OpenAI or Neo4j by using deterministic demo data. L1 voice
-briefing requires `OPENAI_API_KEY` because it uses OpenAI Realtime over WebRTC.
+briefing uses OpenAI Realtime over WebRTC when `OPENAI_API_KEY` is configured, and falls
+back to grounded typed Q&A when it is not.

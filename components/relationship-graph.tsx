@@ -13,7 +13,14 @@ const positions: Record<string, { x: number; y: number }> = {
   "specialist-evelyn": { x: 82, y: 64 },
   "specialist-marcus": { x: 62, y: 14 },
   "person-ong": { x: 28, y: 88 },
-  "referral-business-succession": { x: 74, y: 88 }
+  "referral-business-succession": { x: 74, y: 88 },
+  "meeting-2026-04-08-tan": { x: 42, y: 12 },
+  "life-jia-nus": { x: 28, y: 36 },
+  "concern-will-planning": { x: 54, y: 62 },
+  "concern-policy-renewal": { x: 44, y: 56 },
+  "objective-family-transition": { x: 34, y: 50 },
+  "promise-guide": { x: 64, y: 48 },
+  "action-guide": { x: 70, y: 74 }
 };
 
 export function RelationshipGraph({
@@ -29,15 +36,41 @@ export function RelationshipGraph({
   const selectedEdges = selectedNode
     ? edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id)
     : [];
+  const selectedEdgeIds = new Set(selectedEdges.map((edge) => edge.id));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const focusTargets = [
+    { label: "Client", id: nodes.find((node) => node.type === "Client")?.id },
+    { label: "Concerns", id: nodes.find((node) => node.type === "Concern")?.id },
+    { label: "Referrals", id: nodes.find((node) => node.type === "ReferralOpportunity")?.id },
+    { label: "Actions", id: nodes.find((node) => node.type === "Action")?.id }
+  ].filter((target): target is { label: string; id: string } => Boolean(target.id));
 
   return (
     <Panel title="Relationship Graph" eyebrow="Neo4j-shaped memory">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {focusTargets.map((target) => (
+          <button
+            key={target.label}
+            type="button"
+            onClick={() => setSelectedId(target.id)}
+            className={`focus-ring rounded-md border px-3 py-2 text-sm font-semibold transition ${
+              selectedId === target.id
+                ? "border-signal/50 bg-signal/15 text-ink"
+                : "border-line bg-paper text-muted hover:border-signal/40 hover:text-ink"
+            }`}
+            aria-pressed={selectedId === target.id}
+          >
+            {target.label}
+          </button>
+        ))}
+      </div>
       <div className="relative min-h-[360px] overflow-hidden rounded-lg border border-line bg-paper">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {edges.map((edge) => {
             const source = layout[edge.source];
             const target = layout[edge.target];
             if (!source || !target) return null;
+            const focused = selectedEdgeIds.has(edge.id);
             return (
               <g key={edge.id}>
                 <line
@@ -45,13 +78,16 @@ export function RelationshipGraph({
                   y1={source.y}
                   x2={target.x}
                   y2={target.y}
-                  stroke="oklch(72% 0.035 230)"
-                  strokeWidth="0.35"
+                  stroke={focused ? "oklch(62% 0.15 176)" : "oklch(72% 0.035 230)"}
+                  strokeWidth={focused ? "0.8" : "0.35"}
+                  strokeDasharray={focused ? "1.2 1.1" : undefined}
+                  className={focused ? "graph-focus-edge" : undefined}
+                  opacity={focused ? "1" : "0.58"}
                 />
                 <text
                   x={(source.x + target.x) / 2}
                   y={(source.y + target.y) / 2}
-                  fill="oklch(47% 0.03 235)"
+                  fill={focused ? "oklch(40% 0.11 176)" : "oklch(47% 0.03 235)"}
                   fontSize="2.5"
                   textAnchor="middle"
                 >
@@ -69,11 +105,15 @@ export function RelationshipGraph({
               type="button"
               onClick={() => setSelectedId(node.id)}
               className={`focus-ring absolute w-36 -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-panel p-3 text-left shadow-soft transition hover:-translate-y-[52%] hover:border-signal/50 ${
-                selectedId === node.id ? "border-signal/60 ring-2 ring-signal/20" : "border-line"
+                selectedId === node.id
+                  ? "graph-selected-node border-signal/60 ring-2 ring-signal/20"
+                  : selectedEdges.some((edge) => edge.source === node.id || edge.target === node.id)
+                    ? "border-cobalt/40"
+                    : "border-line"
               }`}
               style={{ left: `${position.x}%`, top: `${position.y}%` }}
             >
-              <Badge tone={node.type === "Client" ? "signal" : node.type === "ReferralOpportunity" ? "amber" : "neutral"}>
+              <Badge tone={nodeTone(node.type)}>
                 {formatNodeType(node.type)}
               </Badge>
               <p className="mt-2 text-sm font-semibold text-ink">{node.label}</p>
@@ -85,7 +125,7 @@ export function RelationshipGraph({
       {selectedNode ? (
         <div className="mt-3 grid gap-3 md:grid-cols-[0.75fr_1.25fr]">
           <div className="rounded-lg border border-line bg-paper p-3">
-            <Badge tone={selectedNode.type === "ReferralOpportunity" ? "amber" : "signal"}>
+            <Badge tone={nodeTone(selectedNode.type)}>
               {formatNodeType(selectedNode.type)}
             </Badge>
             <h3 className="mt-2 text-sm font-semibold text-ink">{selectedNode.label}</h3>
@@ -101,7 +141,7 @@ export function RelationshipGraph({
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedEdges.map((edge) => (
                   <Badge key={edge.id} tone="neutral">
-                    {edge.label}
+                    {edge.label}: {nodeById.get(edge.source === selectedNode.id ? edge.target : edge.source)?.label ?? "Unknown"}
                   </Badge>
                 ))}
               </div>
@@ -140,4 +180,12 @@ function buildNodePositions(nodes: GraphNode[]) {
 
 function formatNodeType(type: GraphNode["type"]) {
   return type === "ReferralOpportunity" ? "Referral Opportunity" : type;
+}
+
+function nodeTone(type: GraphNode["type"]): "neutral" | "signal" | "amber" | "rose" | "cobalt" {
+  if (type === "Client" || type === "LifeEvent" || type === "Action") return "signal";
+  if (type === "ReferralOpportunity" || type === "Promise") return "amber";
+  if (type === "Concern") return "rose";
+  if (type === "Meeting" || type === "Memory") return "cobalt";
+  return "neutral";
 }

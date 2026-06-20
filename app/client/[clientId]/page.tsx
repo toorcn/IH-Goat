@@ -4,7 +4,7 @@ import { KnowledgeGraphWorkbench } from "@/components/knowledge-graph-workbench"
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
 import { AppShell, Badge, MetricCard, Panel, PrimaryButton, SectionHeader } from "@/components/ui";
-import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
+import { getClientContextWithMemoryLayer, getMemoryLayerDiagnostics } from "@/lib/neo4j-memory";
 
 export default async function ClientPage({
   params
@@ -19,6 +19,7 @@ export default async function ClientPage({
   } catch {
     notFound();
   }
+  const diagnostics = await getMemoryLayerDiagnostics(clientId);
 
   return (
     <AppShell>
@@ -40,7 +41,7 @@ export default async function ClientPage({
         <Timeline context={context} />
       </section>
 
-      <KnowledgeGraphWorkbench context={context} />
+      <KnowledgeGraphWorkbench context={context} diagnostics={diagnostics} />
 
       <RelationshipGraph nodes={context.graph.nodes} edges={context.graph.edges} />
 

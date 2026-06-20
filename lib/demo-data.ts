@@ -257,6 +257,48 @@ export const graphNodes: GraphNode[] = [
     label: "Business Succession Lead",
     type: "ReferralOpportunity",
     note: "Potential referral from Mr. Tan's network"
+  },
+  {
+    id: "meeting-2026-04-08-tan",
+    label: "2026-04-08 Review",
+    type: "Meeting",
+    note: "Estate planning and policy renewal concerns"
+  },
+  {
+    id: "life-jia-nus",
+    label: "Jia En NUS milestone",
+    type: "LifeEvent",
+    note: "High-salience family opener"
+  },
+  {
+    id: "concern-will-planning",
+    label: "Will planning open",
+    type: "Concern",
+    note: "Unresolved concern from prior meeting"
+  },
+  {
+    id: "concern-policy-renewal",
+    label: "Policy renewal hesitation",
+    type: "Concern",
+    note: "Emotional cue tied to renewal timing"
+  },
+  {
+    id: "objective-family-transition",
+    label: "Smooth family transition",
+    type: "Objective",
+    note: "Client wants a low-conflict family planning handover"
+  },
+  {
+    id: "promise-guide",
+    label: "Estate guide promised",
+    type: "Promise",
+    note: "Sarah promised follow-up material"
+  },
+  {
+    id: "action-guide",
+    label: "Send estate guide",
+    type: "Action",
+    note: "Post-meeting follow-up due 2026-06-21"
   }
 ];
 
@@ -308,6 +350,54 @@ export const graphEdges: GraphEdge[] = [
     source: "person-ong",
     target: "referral-business-succession",
     label: "may need"
+  },
+  {
+    id: "edge-client-last-meeting",
+    source: client.id,
+    target: "meeting-2026-04-08-tan",
+    label: "last meeting"
+  },
+  {
+    id: "edge-meeting-life-event",
+    source: "meeting-2026-04-08-tan",
+    target: "life-jia-nus",
+    label: "captured"
+  },
+  {
+    id: "edge-client-life-event",
+    source: client.id,
+    target: "life-jia-nus",
+    label: "has life event"
+  },
+  {
+    id: "edge-client-will-concern",
+    source: client.id,
+    target: "concern-will-planning",
+    label: "has concern"
+  },
+  {
+    id: "edge-client-policy-concern",
+    source: client.id,
+    target: "concern-policy-renewal",
+    label: "has concern"
+  },
+  {
+    id: "edge-client-family-objective",
+    source: client.id,
+    target: "objective-family-transition",
+    label: "has objective"
+  },
+  {
+    id: "edge-meeting-guide-promise",
+    source: "meeting-2026-04-08-tan",
+    target: "promise-guide",
+    label: "created promise"
+  },
+  {
+    id: "edge-client-guide-action",
+    source: client.id,
+    target: "action-guide",
+    label: "has action"
   }
 ];
 

@@ -2,20 +2,30 @@ import { GitBranch, Network, Search, ShieldCheck } from "lucide-react";
 import type { ClientContext, GraphNode } from "@/lib/types";
 import { Badge, MetricCard, Panel } from "./ui";
 
-export function KnowledgeGraphWorkbench({ context }: { context: ClientContext }) {
-  const nodeCounts = context.graph.nodes.reduce<Record<GraphNode["type"], number>>(
-    (counts, node) => ({
-      ...counts,
-      [node.type]: counts[node.type] + 1
-    }),
-    {
-      Advisor: 0,
-      Client: 0,
-      Person: 0,
-      Specialist: 0,
-      ReferralOpportunity: 0
-    }
-  );
+type Diagnostics = {
+  configured?: boolean;
+  source?: string;
+  exists?: boolean;
+  outgoingEdges?: number;
+  memories?: number;
+  materializedMemories?: number;
+  meetingLinkedMemories?: number;
+  typedNeighbors?: number;
+  message?: string;
+  error?: string;
+};
+
+export function KnowledgeGraphWorkbench({
+  context,
+  diagnostics
+}: {
+  context: ClientContext;
+  diagnostics?: Diagnostics;
+}) {
+  const nodeCounts = context.graph.nodes.reduce<Record<string, number>>((counts, node) => {
+    counts[node.type] = (counts[node.type] ?? 0) + 1;
+    return counts;
+  }, {});
   const sourcedMemories = context.memories.filter((memory) => memory.sourceSnippet.trim().length > 0);
   const evidenceCoverage = Math.round((sourcedMemories.length / Math.max(1, context.memories.length)) * 100);
   const openLoops = context.memories.filter((memory) => memory.status === "open");
@@ -31,6 +41,25 @@ export function KnowledgeGraphWorkbench({ context }: { context: ClientContext })
         <MetricCard label="Referral paths" value={`${referralNodes.length}`} detail="Warm introductions and leads." tone="rose" />
       </div>
 
+      {diagnostics ? (
+        <div className="mt-4 rounded-lg border border-line bg-paper p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={diagnostics.source === "neo4j" && diagnostics.exists ? "signal" : "amber"}>
+              {diagnostics.source === "neo4j" && diagnostics.exists ? "Neo4j live" : "Demo fallback"}
+            </Badge>
+            <span className="text-sm font-semibold text-ink">
+              {diagnostics.error ?? diagnostics.message ?? "Memory graph diagnostics ready."}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <MetricCard label="DB memories" value={`${diagnostics.memories ?? 0}`} detail="Generic evidence nodes." tone="neutral" />
+            <MetricCard label="Materialized" value={`${diagnostics.materializedMemories ?? 0}`} detail="Typed graph facts." tone="signal" />
+            <MetricCard label="Meeting-linked" value={`${diagnostics.meetingLinkedMemories ?? 0}`} detail="Source provenance." tone="cobalt" />
+            <MetricCard label="Typed neighbors" value={`${diagnostics.typedNeighbors ?? 0}`} detail="Client graph fan-out." tone="amber" />
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-lg border border-line bg-paper p-3">
           <div className="flex items-center gap-2">
@@ -38,7 +67,9 @@ export function KnowledgeGraphWorkbench({ context }: { context: ClientContext })
             <p className="text-sm font-semibold text-ink">Node Mix</p>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {Object.entries(nodeCounts).map(([type, count]) => (
+            {Object.entries(nodeCounts)
+              .sort(([left], [right]) => left.localeCompare(right))
+              .map(([type, count]) => (
               <div key={type} className="flex items-center justify-between gap-3 rounded-md border border-line bg-panel px-3 py-2">
                 <span className="text-sm text-muted">{formatNodeType(type as GraphNode["type"])}</span>
                 <Badge tone={count > 0 ? "signal" : "neutral"}>{count}</Badge>
