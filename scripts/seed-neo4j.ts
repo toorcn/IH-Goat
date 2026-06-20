@@ -1,4 +1,5 @@
 import neo4j, { type Driver } from "neo4j-driver";
+import { extraJourneys, type ExtraJourney } from "../lib/extra-journeys";
 import {
   actions,
   advisor,
@@ -7,6 +8,7 @@ import {
   meetings,
   memories
 } from "../lib/demo-data";
+import type { GraphEdge, GraphNode, MemoryItem } from "../lib/types";
 import { getNeo4jDatabaseConfig, loadLocalEnv } from "./load-local-env";
 
 loadLocalEnv();
@@ -178,7 +180,12 @@ async function main() {
       { clientId: client.id, spouse, daughter, referral, evelyn, marcus }
     );
 
+    for (const journey of extraJourneys) {
+      await seedExtraJourney(driver, journey);
+    }
+
     console.log("Seeded Neo4j demo graph for Advisors' Advisor.");
+    console.log(`Seeded ${extraJourneys.length} extra advisor journeys.`);
   } finally {
     await driver.close();
   }
@@ -207,7 +214,8 @@ function demoNodeIds() {
     "realtime-test-will-planning",
     "realtime-test-will-planning-typed",
     ...actions.map((action) => action.id),
-    ...graphNodes.map((node) => node.id)
+    ...graphNodes.map((node) => node.id),
+    ...extraJourneys.flatMap(extraJourneyNodeIds)
   ];
 }
 
@@ -218,7 +226,166 @@ function executeWrite(driver: Driver, query: string, parameters: Record<string, 
   });
 }
 
-function seedTypedMemory(driver: Driver, memory: (typeof memories)[number]) {
+async function seedExtraJourney(driver: Driver, journey: ExtraJourney) {
+  await executeWrite(
+    driver,
+    `
+    MERGE (a:Advisor {id: $advisor.id})
+    SET a.name = $advisor.name,
+        a.firm = $advisor.firm,
+        a.label = $advisor.name,
+        a.note = $advisor.firm
+    MERGE (c:Client {id: $client.id})
+    SET c.name = $client.name,
+        c.label = $client.name,
+        c.note = $clientNote,
+        c.clientType = $client.clientType,
+        c.riskProfile = $client.riskProfile,
+        c.relationshipSince = $client.relationshipSince
+    MERGE (a)-[serves:MANAGES]->(c)
+    SET serves.id = $managesEdgeId,
+        serves.label = 'manages'
+    MERGE (a)-[servesAlias:SERVES]->(c)
+    SET servesAlias.id = $servesEdgeId,
+        servesAlias.label = 'serves'
+    `,
+    {
+      advisor: journey.advisor,
+      client: journey.client,
+      clientNote: journey.graphNodes.find((node) => node.id === journey.client.id)?.note ?? journey.client.clientType,
+      managesEdgeId: `edge-${journey.client.id}-manages`,
+      servesEdgeId: `edge-${journey.client.id}-serves`
+    }
+  );
+
+  for (const meeting of journey.meetings) {
+    await executeWrite(
+      driver,
+      `
+      MATCH (c:Client {id: $meeting.clientId})
+      MERGE (m:Meeting {id: $meeting.id})
+      SET m.startsAt = $meeting.startsAt,
+          m.endedAt = $meeting.endedAt,
+          m.type = $meeting.type,
+          m.location = $meeting.location,
+          m.objective = $meeting.objective,
+          m.status = $meeting.status
+      MERGE (c)-[:HAS_MEETING]->(m)
+      `,
+      { meeting }
+    );
+  }
+
+  const lastMeetingId = journey.meetings.find((meeting) => meeting.status === "review")?.id ?? journey.meetings[0].id;
+  for (const memory of journey.memories) {
+    await executeWrite(
+      driver,
+      `
+      MATCH (c:Client {id: $memory.clientId})
+      MERGE (mem:Memory {id: $memory.id})
+      SET mem.category = $memory.category,
+          mem.title = $memory.title,
+          mem.summary = $memory.summary,
+          mem.source = $memory.source,
+          mem.sourceSnippet = $memory.sourceSnippet,
+          mem.confidence = $memory.confidence,
+          mem.status = $memory.status,
+          mem.validFrom = $memory.validFrom,
+          mem.lastConfirmedAt = $memory.lastConfirmedAt,
+          mem.salience = $memory.salience
+      MERGE (c)-[:HAS_MEMORY]->(mem)
+      `,
+      { memory }
+    );
+    await seedTypedMemory(driver, memory, lastMeetingId);
+  }
+
+  for (const action of journey.actions) {
+    await executeWrite(
+      driver,
+      `
+      MATCH (c:Client {id: $action.clientId})
+      MATCH (m:Meeting {id: $action.meetingId})
+      MERGE (act:Action {id: $action.id})
+      SET act.title = $action.title,
+          act.actionType = $action.actionType,
+          act.dueAt = $action.dueAt,
+          act.owner = $action.owner,
+          act.status = $action.status,
+          act.meetingId = $action.meetingId,
+          act.draftText = $action.draftText
+      MERGE (c)-[:HAS_ACTION]->(act)
+      MERGE (act)-[:FOLLOWS_FROM]->(m)
+      `,
+      { action }
+    );
+  }
+
+  for (const node of journey.graphNodes) {
+    await seedGraphNode(driver, node);
+  }
+
+  for (const edge of journey.graphEdges) {
+    await seedGraphEdge(driver, edge);
+  }
+}
+
+function seedGraphNode(driver: Driver, node: GraphNode) {
+  const label = graphNodeLabel(node.type);
+  return executeWrite(
+    driver,
+    `
+    MERGE (n:${label} {id: $node.id})
+    SET n.name = $node.label,
+        n.label = $node.label,
+        n.title = $node.label,
+        n.note = $node.note,
+        n.role = coalesce(n.role, $nodeType),
+        n.description = $node.note
+    `,
+    { node, nodeType: node.type }
+  );
+}
+
+function seedGraphEdge(driver: Driver, edge: GraphEdge) {
+  const relationshipType = graphRelationshipType(edge);
+  return executeWrite(
+    driver,
+    `
+    MATCH (source {id: $source})
+    MATCH (target {id: $target})
+    MERGE (source)-[rel:${relationshipType} {id: $id}]->(target)
+    SET rel.label = $label
+    `,
+    edge
+  );
+}
+
+function graphNodeLabel(type: GraphNode["type"]) {
+  if (type === "ReferralOpportunity") return "ReferralOpportunity";
+  return type;
+}
+
+function graphRelationshipType(edge: GraphEdge) {
+  if (edge.label === "manages") return "MANAGES";
+  if (edge.label === "has opportunity") return "HAS_REFERRAL_OPPORTUNITY";
+  if (edge.source.startsWith("referral-") && edge.label.includes("support")) return "INVOLVES";
+  if (edge.source.startsWith("referral-")) return "MATCHES_SPECIALIST";
+  return "RELATED_TO";
+}
+
+function extraJourneyNodeIds(journey: ExtraJourney) {
+  return [
+    journey.client.id,
+    ...journey.meetings.map((meeting) => meeting.id),
+    ...journey.memories.map((memory) => memory.id),
+    ...journey.memories.map((memory) => typedMemoryId(memory)),
+    ...journey.actions.map((action) => action.id),
+    ...journey.graphNodes.map((node) => node.id)
+  ];
+}
+
+function seedTypedMemory(driver: Driver, memory: MemoryItem, meetingId?: string) {
   const typed = typedMemoryFor(memory);
   if (!typed) return Promise.resolve();
 
@@ -247,7 +414,7 @@ function seedTypedMemory(driver: Driver, memory: (typeof memories)[number]) {
     {
       clientId: memory.clientId,
       memoryId: memory.id,
-      meetingId: memory.source.includes("2026-04-08") ? "meeting-2026-04-08-tan" : "meeting-2026-06-20-tan",
+      meetingId: meetingId ?? (memory.source.includes("2026-04-08") ? "meeting-2026-04-08-tan" : "meeting-2026-06-20-tan"),
       typedId: typedMemoryId(memory),
       title: memory.title,
       summary: memory.summary,
@@ -263,7 +430,7 @@ function seedTypedMemory(driver: Driver, memory: (typeof memories)[number]) {
   );
 }
 
-function typedMemoryFor(memory: (typeof memories)[number]) {
+function typedMemoryFor(memory: MemoryItem) {
   if (memory.category === "Life Event") return { label: "LifeEvent", relationship: "HAS_LIFE_EVENT" };
   if (memory.category === "Unresolved Concern" || memory.category === "Emotional Cue") {
     return { label: "Concern", relationship: "HAS_CONCERN" };
@@ -273,6 +440,6 @@ function typedMemoryFor(memory: (typeof memories)[number]) {
   return null;
 }
 
-function typedMemoryId(memory: (typeof memories)[number]) {
+function typedMemoryId(memory: MemoryItem) {
   return `${memory.id}-typed`;
 }
