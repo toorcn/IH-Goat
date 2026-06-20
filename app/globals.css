@@ -117,6 +117,74 @@ textarea {
   }
 }
 
+/* Voice stage */
+.voice-ring {
+  animation: voice-ring 2.6s var(--ease-out) infinite;
+}
+
+.voice-ring--delay {
+  animation-delay: 1.3s;
+}
+
+.voice-breathe {
+  animation: voice-breathe 3.4s var(--ease-in-out) infinite;
+}
+
+.voice-bar {
+  transform-origin: center bottom;
+  animation: voice-bar 900ms var(--ease-in-out) infinite;
+}
+
+@keyframes voice-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.5;
+  }
+  80% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes voice-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+@keyframes voice-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.caption-enter {
+  animation: caption-enter 280ms var(--ease-out) both;
+}
+
+@keyframes caption-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .hover-lift:hover {
     transform: translateY(-2px);
