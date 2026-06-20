@@ -9,7 +9,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-[100dvh]">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 px-4 py-4 sm:px-6 lg:gap-7 lg:px-8 lg:py-6">
-        <header className="rounded-[1.25rem] border border-line/80 bg-panel/82 p-1.5 shadow-diffusion backdrop-blur-xl">
+        <header className="relative z-30 rounded-[1.25rem] border border-line/80 bg-panel/82 p-1.5 shadow-diffusion backdrop-blur-xl">
           <div className="flex items-center justify-between gap-2">
             <Link
               href="/"
