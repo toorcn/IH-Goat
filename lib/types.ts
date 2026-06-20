@@ -79,6 +79,48 @@ export type GraphEdge = {
   label: string;
 };
 
+export type MemoryDisplayMode =
+  | "brief"
+  | "cards"
+  | "table"
+  | "graph"
+  | "timeline"
+  | "recommendation"
+  | "missing_info";
+
+export type EvidenceSnippet = {
+  id: string;
+  label: string;
+  source: string;
+  snippet: string;
+  confidence?: number;
+};
+
+export type SuggestedAction = {
+  id: string;
+  title: string;
+  reason: string;
+  owner?: string;
+  dueAt?: string;
+  status?: ActionItem["status"] | "suggested";
+  draftText?: string;
+};
+
+export type MemoryQueryVisualResponse = {
+  clientId: string;
+  query: string;
+  source: "neo4j" | "demo";
+  displayMode: MemoryDisplayMode;
+  answer: string;
+  citations: EvidenceSnippet[];
+  cards?: Array<{ id: string; title: string; eyebrow: string; body: string; meta?: string }>;
+  rows?: Array<{ label: string; value: string; detail?: string }>;
+  graph?: { nodes: GraphNode[]; edges: GraphEdge[] };
+  actions?: SuggestedAction[];
+  missingInfo?: { title: string; reason: string; suggestedNextStep: string };
+  warning?: string;
+};
+
 export type ClientContext = {
   advisor: Advisor;
   client: Client;

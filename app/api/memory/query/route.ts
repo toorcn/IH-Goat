@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { queryClientMemory } from "@/lib/neo4j-memory";
+import { buildMemoryQueryVisualResponse } from "@/lib/memory-query-response";
+import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { clientId?: string; query?: string };
@@ -8,5 +9,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
   }
 
-  return NextResponse.json(await queryClientMemory(body.clientId, body.query ?? ""));
+  const context = await getClientContextWithMemoryLayer(body.clientId);
+  return NextResponse.json(buildMemoryQueryVisualResponse(context, body.query ?? ""));
 }

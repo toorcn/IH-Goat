@@ -34,6 +34,8 @@ export async function POST(request: Request) {
         type: "realtime",
         model,
         instructions: body.instructions ?? buildDefaultInstructions(),
+        ...(body.tools ? { tools: body.tools } : {}),
+        ...(body.tool_choice ? { tool_choice: body.tool_choice } : {}),
         audio: {
           output: {
             voice: body.voice ?? "alloy"
@@ -71,7 +73,12 @@ export async function POST(request: Request) {
 
 async function readOptionalJson(request: Request) {
   try {
-    return (await request.json()) as { voice?: string; instructions?: string };
+    return (await request.json()) as {
+      voice?: string;
+      instructions?: string;
+      tools?: unknown[];
+      tool_choice?: string | Record<string, unknown>;
+    };
   } catch {
     return {};
   }
