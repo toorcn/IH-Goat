@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ClientContextPanel } from "@/components/context-panel";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
-import { AppShell, Badge, Panel, PrimaryButton } from "@/components/ui";
+import { AppShell, Badge, MetricCard, Panel, PrimaryButton, SectionHeader } from "@/components/ui";
 import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
 export default async function ClientPage({
@@ -21,17 +21,17 @@ export default async function ClientPage({
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <Badge tone="cobalt">client profile</Badge>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal text-ink">
-            {context.client.name}
-          </h1>
-          <p className="mt-2 max-w-3xl text-base leading-7 text-muted">
-            Structured memory, timeline, actions, and relationship graph for advisor recall.
-          </p>
-        </div>
-        <PrimaryButton href={`/briefing/${context.upcomingMeeting.id}`}>Brief this client</PrimaryButton>
+      <SectionHeader
+        eyebrow="Client memory"
+        title={context.client.name}
+        description="Structured memories, timeline evidence, open concerns, and relationship graph context for advisor recall."
+        action={<PrimaryButton href={`/briefing/${context.upcomingMeeting.id}`}>Brief this client</PrimaryButton>}
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <MetricCard label="Relationship" value={`Since ${context.client.relationshipSince}`} detail={context.client.riskProfile} tone="cobalt" />
+        <MetricCard label="Graph" value={`${context.graph.nodes.length} nodes`} detail={`${context.graph.edges.length} known relationships`} tone="signal" />
+        <MetricCard label="Open concerns" value={`${context.memories.filter((memory) => memory.status === "open").length}`} detail="Ready for the next briefing." tone="amber" />
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">

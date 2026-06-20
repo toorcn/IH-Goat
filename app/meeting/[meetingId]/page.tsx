@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ClientContextPanel } from "@/components/context-panel";
 import { MeetingCompanion } from "@/components/meeting-companion";
-import { AppShell, Badge, PrimaryButton } from "@/components/ui";
+import { AppShell, MetricCard, PrimaryButton, SectionHeader } from "@/components/ui";
 import { getMeeting } from "@/lib/demo-data";
 import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
 
@@ -20,21 +20,26 @@ export default async function MeetingPage({
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <Badge tone="rose">silent meeting mode</Badge>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal text-ink">
-            Keep client conversation human while Sarah gets live prompts.
-          </h1>
-          <p className="mt-2 max-w-3xl text-base leading-7 text-muted">
-            The companion treats audio as one conversation stream for MVP purposes, extracts
-            candidate facts, and shows advisor-only suggestions.
-          </p>
-        </div>
-        <PrimaryButton href={`/post-meeting/${meeting.id}`}>End and review</PrimaryButton>
+      <SectionHeader
+        eyebrow="Silent meeting companion"
+        title="Keep the client conversation human while Sarah gets live prompts."
+        description="This page proves live capture, advisor-only suggestions, and candidate memory extraction from the meeting stream."
+        action={<PrimaryButton href={`/post-meeting/${meeting.id}`}>End and review</PrimaryButton>}
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <MetricCard label="Capture" value="Audio" detail="Browser microphone chunks post to transcription." tone="rose" />
+        <MetricCard label="Advisor view" value="Silent" detail="Suggestions appear without client-facing interruption." tone="cobalt" />
+        <MetricCard label="Memory" value="Pending" detail="New facts stay candidates until review." tone="amber" />
       </div>
 
       <MeetingCompanion context={context} />
+
+      <SectionHeader
+        eyebrow="Client context"
+        title="The memory Sarah can reference mid-meeting."
+        description="Open concerns, relationship cues, and graph-backed facts remain visible beside the live workflow."
+      />
       <ClientContextPanel context={context} />
     </AppShell>
   );

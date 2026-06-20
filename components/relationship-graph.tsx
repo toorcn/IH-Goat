@@ -58,7 +58,7 @@ export function RelationshipGraph({
               style={{ left: `${position.x}%`, top: `${position.y}%` }}
             >
               <Badge tone={node.type === "Client" ? "signal" : node.type === "ReferralOpportunity" ? "amber" : "neutral"}>
-                {node.type}
+                {formatNodeType(node.type)}
               </Badge>
               <p className="mt-2 text-sm font-semibold text-ink">{node.label}</p>
               <p className="mt-1 text-xs leading-5 text-muted">{node.note}</p>
@@ -68,4 +68,8 @@ export function RelationshipGraph({
       </div>
     </Panel>
   );
+}
+
+function formatNodeType(type: GraphNode["type"]) {
+  return type === "ReferralOpportunity" ? "Referral Opportunity" : type;
 }

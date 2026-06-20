@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import { ArrowRight, CheckCircle2, CircleAlert, Clock, Radio } from "lucide-react";
 
 type BadgeTone = "neutral" | "signal" | "amber" | "rose" | "cobalt";
+type FeatureTone = "signal" | "amber" | "rose" | "cobalt";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b border-line pb-4 md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-7 px-4 py-5 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-4 border-b border-line/80 pb-5 md:flex-row md:items-center md:justify-between">
           <Link href="/" className="focus-ring group w-fit rounded-md">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
               Peak Wealth Advisors
@@ -35,7 +36,7 @@ export function NavLink({ href, children }: { href: string; children: ReactNode 
   return (
     <Link
       href={href}
-      className="focus-ring rounded-md border border-line bg-panel px-3 py-2 text-ink transition hover:border-signal/50 hover:text-signal"
+      className="focus-ring rounded-md border border-line bg-panel/90 px-3 py-2 text-ink shadow-sm transition hover:border-signal/50 hover:bg-panel hover:text-signal"
     >
       {children}
     </Link>
@@ -56,7 +57,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={`rounded-lg border border-line bg-panel p-4 shadow-soft ${className}`}>
+    <section className={`rounded-lg border border-line/90 bg-panel/95 p-4 shadow-soft ${className}`}>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           {eyebrow ? (
@@ -70,6 +71,116 @@ export function Panel({
       </div>
       {children}
     </section>
+  );
+}
+
+export function SectionHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+  className = ""
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-3 md:flex-row md:items-end md:justify-between ${className}`}>
+      <div>
+        {eyebrow ? (
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-ink md:text-4xl">
+          {title}
+        </h1>
+        {description ? (
+          <p className="mt-2 max-w-3xl text-base leading-7 text-muted">{description}</p>
+        ) : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function FeatureCard({
+  eyebrow,
+  title,
+  description,
+  href,
+  cta,
+  icon,
+  tone = "signal",
+  children
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  href: string;
+  cta: string;
+  icon: ReactNode;
+  tone?: FeatureTone;
+  children?: ReactNode;
+}) {
+  const tones: Record<FeatureTone, string> = {
+    signal: "border-signal/25 bg-signal/10 text-signal",
+    amber: "border-amber/35 bg-amber/15 text-amber",
+    rose: "border-rose/30 bg-rose/10 text-rose",
+    cobalt: "border-cobalt/30 bg-cobalt/10 text-cobalt"
+  };
+
+  return (
+    <Link
+      href={href}
+      className="focus-ring group flex min-h-[220px] flex-col rounded-lg border border-line bg-panel p-4 shadow-soft transition hover:-translate-y-0.5 hover:border-signal/50 hover:bg-white"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className={`rounded-lg border p-2 ${tones[tone]}`}>{icon}</div>
+        <ArrowRight className="mt-1 h-4 w-4 text-muted transition group-hover:translate-x-0.5 group-hover:text-signal" />
+      </div>
+      <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+        {eyebrow}
+      </p>
+      <h3 className="mt-2 text-lg font-semibold leading-snug text-ink">{title}</h3>
+      <p className="mt-2 flex-1 text-sm leading-6 text-muted">{description}</p>
+      {children ? <div className="mt-4">{children}</div> : null}
+      <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-ink">
+        {cta}
+        <ArrowRight className="h-4 w-4 text-signal" />
+      </span>
+    </Link>
+  );
+}
+
+export function MetricCard({
+  label,
+  value,
+  detail,
+  tone = "neutral"
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  tone?: BadgeTone;
+}) {
+  const tones: Record<BadgeTone, string> = {
+    neutral: "bg-paper",
+    signal: "bg-signal/10",
+    amber: "bg-amber/15",
+    rose: "bg-rose/10",
+    cobalt: "bg-cobalt/10"
+  };
+
+  return (
+    <div className={`rounded-lg border border-line p-3 ${tones[tone]}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
+      <p className="mt-2 text-2xl font-semibold leading-none text-ink">{value}</p>
+      {detail ? <p className="mt-2 text-sm leading-5 text-muted">{detail}</p> : null}
+    </div>
   );
 }
 

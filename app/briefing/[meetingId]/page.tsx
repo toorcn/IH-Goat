@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ClientContextPanel } from "@/components/context-panel";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
-import { AppShell, Badge, Panel, PrimaryButton } from "@/components/ui";
+import { AppShell, MetricCard, Panel, PrimaryButton, SectionHeader } from "@/components/ui";
 import { VoiceBriefing } from "@/components/voice-briefing";
 import { getMeeting } from "@/lib/demo-data";
 import { getClientContextWithMemoryLayer } from "@/lib/neo4j-memory";
@@ -20,21 +20,26 @@ export default async function BriefingPage({
 
   return (
     <AppShell>
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <Badge tone="signal">pre-meeting</Badge>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal text-ink">
-            Brief Sarah before she meets {context.client.name}.
-          </h1>
-          <p className="mt-2 max-w-3xl text-base leading-7 text-muted">
-            Voice runs through OpenAI Realtime over WebRTC with a server-minted ephemeral
-            token. The session is grounded in the Neo4j-backed client context shown below.
-          </p>
-        </div>
-        <PrimaryButton href={`/meeting/${meeting.id}`}>Start live companion</PrimaryButton>
+      <SectionHeader
+        eyebrow="Pre-meeting voice briefing"
+        title={`Brief Sarah before she meets ${context.client.name}.`}
+        description="This page proves the advisor can get a spoken, memory-grounded briefing and ask follow-up questions before entering the client conversation."
+        action={<PrimaryButton href={`/meeting/${meeting.id}`}>Start live companion</PrimaryButton>}
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <MetricCard label="Voice transport" value="WebRTC" detail="Realtime session with an ephemeral server token." tone="signal" />
+        <MetricCard label="Grounding" value={context.memorySource === "neo4j" ? "Neo4j" : "Demo"} detail="Briefing uses the same client context shown below." tone="cobalt" />
+        <MetricCard label="Next step" value="Companion" detail="Move directly into silent meeting support." tone="amber" />
       </div>
 
       <VoiceBriefing context={context} />
+
+      <SectionHeader
+        eyebrow="Grounding context"
+        title="What the assistant is allowed to use."
+        description="The briefing is intentionally bounded by known memories, timeline evidence, and relationship graph facts."
+      />
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <ClientContextPanel context={context} />
