@@ -20,7 +20,22 @@ export function RelationshipGraph({
 }) {
   return (
     <Panel title="Relationship Graph" eyebrow="Neo4j-shaped memory">
-      <div className="relative min-h-[360px] overflow-hidden rounded-lg border border-line bg-paper">
+      <div className="md:hidden">
+        <div className="divide-y divide-line overflow-hidden rounded-[1.2rem] border border-line bg-paper">
+          {nodes.map((node) => (
+            <article key={node.id} className="p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={node.type === "Client" ? "signal" : node.type === "ReferralOpportunity" ? "amber" : "neutral"}>
+                  {node.type}
+                </Badge>
+                <p className="text-sm font-semibold text-ink">{node.label}</p>
+              </div>
+              <p className="mt-1 text-sm leading-6 text-muted">{node.note}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+      <div className="relative hidden min-h-[430px] overflow-hidden rounded-[1.35rem] border border-line bg-paper md:block">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {edges.map((edge) => {
             const source = positions[edge.source];
@@ -54,7 +69,7 @@ export function RelationshipGraph({
           return (
             <div
               key={node.id}
-              className="absolute w-36 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-panel p-3 shadow-soft"
+              className="absolute w-40 -translate-x-1/2 -translate-y-1/2 rounded-[1.1rem] border border-line bg-panel/95 p-3 shadow-soft backdrop-blur"
               style={{ left: `${position.x}%`, top: `${position.y}%` }}
             >
               <Badge tone={node.type === "Client" ? "signal" : node.type === "ReferralOpportunity" ? "amber" : "neutral"}>

@@ -9,18 +9,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "oklch(21% 0.016 235)",
-        paper: "oklch(97% 0.006 230)",
-        panel: "oklch(99% 0.004 230)",
-        line: "oklch(88% 0.012 230)",
-        muted: "oklch(55% 0.025 235)",
-        signal: "oklch(57% 0.14 176)",
-        cobalt: "oklch(48% 0.13 250)",
-        amber: "oklch(74% 0.15 78)",
-        rose: "oklch(59% 0.16 18)"
+        ink: "oklch(21% 0.012 160)",
+        paper: "oklch(98% 0.004 155)",
+        panel: "oklch(99.3% 0.003 155)",
+        line: "oklch(88% 0.012 155)",
+        muted: "oklch(49% 0.022 160)",
+        signal: "oklch(55% 0.115 164)",
+        cobalt: "oklch(39% 0.05 165)",
+        amber: "oklch(71% 0.13 82)",
+        rose: "oklch(58% 0.14 22)"
       },
       boxShadow: {
-        soft: "0 16px 45px rgb(22 31 44 / 0.08)"
+        soft: "0 18px 48px rgb(36 50 42 / 0.08)",
+        diffusion: "0 24px 70px -34px rgb(31 45 38 / 0.22)"
       }
     }
   },

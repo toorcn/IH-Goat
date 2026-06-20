@@ -1,4 +1,5 @@
 import type { ClientContext } from "@/lib/types";
+import type { CSSProperties } from "react";
 import { Badge, Panel } from "./ui";
 
 export function Timeline({ context }: { context: ClientContext }) {
@@ -25,11 +26,15 @@ export function Timeline({ context }: { context: ClientContext }) {
 
   return (
     <Panel title="Timeline" eyebrow="Recent context">
-      <ol className="space-y-3">
-        {rows.map((row) => (
-          <li key={`${row.date}-${row.title}`} className="grid grid-cols-[6rem_1fr] gap-3">
+      <ol className="divide-y divide-line overflow-hidden rounded-[1.2rem] border border-line bg-paper/80">
+        {rows.map((row, index) => (
+          <li
+            key={`${row.date}-${row.title}`}
+            className="stagger-item grid gap-3 p-3 sm:grid-cols-[7.5rem_1fr] sm:p-4"
+            style={{ "--index": index } as CSSProperties & Record<"--index", number>}
+          >
             <Badge tone={row.tone}>{row.date}</Badge>
-            <div className="border-b border-line pb-3 last:border-b-0">
+            <div>
               <p className="text-sm font-semibold text-ink">{row.title}</p>
               <p className="mt-1 text-sm leading-6 text-muted">{row.body}</p>
             </div>
