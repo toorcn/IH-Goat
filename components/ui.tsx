@@ -30,6 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </summary>
                 <div className="absolute right-0 top-[calc(100%+0.45rem)] z-50 min-w-36 overflow-hidden rounded-[1rem] border border-line/80 bg-panel p-1.5 shadow-diffusion backdrop-blur-xl">
                   <MenuLink href="/">Dashboard</MenuLink>
+                  <MenuLink href="/qna/meeting-2026-06-20-tan">Q&A</MenuLink>
                   <MenuLink href="/client/client-tan">Client</MenuLink>
                   <MenuLink href="/post-meeting/meeting-2026-06-20-tan">Review</MenuLink>
                 </div>
