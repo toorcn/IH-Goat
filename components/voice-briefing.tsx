@@ -42,19 +42,19 @@ function tryParseJSON(str: string) {
     const closeBraces = (cleaned.match(/\}/g) || []).length;
     const openBrackets = (cleaned.match(/\[/g) || []).length;
     const closeBrackets = (cleaned.match(/\]/g) || []).length;
-    
+
     let repaired = cleaned;
     if (repaired.endsWith(",")) {
       repaired = repaired.slice(0, -1);
     }
-    
+
     for (let i = 0; i < openBraces - closeBraces; i++) {
       repaired += "}";
     }
     for (let i = 0; i < openBrackets - closeBrackets; i++) {
       repaired += "]";
     }
-    
+
     try {
       return JSON.parse(repaired);
     } catch {

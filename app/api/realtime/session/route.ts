@@ -19,6 +19,31 @@ export async function POST(request: Request) {
     });
   }
 
+  // Transcription mode (L2 live companion): listen, transcribe both speakers,
+  // and let gpt-realtime-2 emit advisor-only tool calls. Text-only output plus
+  // tool-only instructions prevent spoken audio from being produced.
+  const transcribeModel = process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL ?? "gpt-realtime-whisper";
+  const audio = body.transcribe
+    ? {
+        input: {
+          noise_reduction: { type: "near_field" },
+          transcription: { model: transcribeModel, language: "en" },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 600,
+            create_response: true,
+            interrupt_response: false
+          }
+        }
+      }
+    : {
+        output: {
+          voice: body.voice ?? "alloy"
+        }
+      };
+
   const response = await fetch(realtimeClientSecretUrl, {
     method: "POST",
     headers: {
@@ -34,13 +59,10 @@ export async function POST(request: Request) {
         type: "realtime",
         model,
         instructions: body.instructions ?? buildDefaultInstructions(),
-        ...(body.tools ? { tools: body.tools } : {}),
-        ...(body.tool_choice ? { tool_choice: body.tool_choice } : {}),
-        audio: {
-          output: {
-            voice: body.voice ?? "alloy"
-          }
-        }
+        ...(body.transcribe ? { output_modalities: ["text"], max_output_tokens: 512 } : {}),
+        tools: body.tools ?? (body.transcribe ? buildLiveCompanionTools() : undefined),
+        tool_choice: body.tool_choice ?? (body.transcribe ? "auto" : undefined),
+        audio
       }
     })
   });
@@ -78,6 +100,7 @@ async function readOptionalJson(request: Request) {
       instructions?: string;
       tools?: unknown[];
       tool_choice?: string | Record<string, unknown>;
+      transcribe?: boolean;
     };
   } catch {
     return {};
@@ -114,4 +137,116 @@ function buildDefaultInstructions() {
     "Keep responses brief, concrete, and useful for the advisor.",
     "Do not address, message, or advise the client directly."
   ].join(" ");
+}
+
+function buildLiveCompanionTools() {
+  return [
+    {
+      type: "function",
+      name: "search_client_memory",
+      description: "Search Neo4j for a small number of client-specific memories, actions, and relationship graph facts that are relevant to the current conversation.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["query", "reason"],
+        properties: {
+          query: {
+            type: "string",
+            description: "Focused search terms for the exact topic, person, goal, concern, action, or referral being discussed."
+          },
+          reason: {
+            type: "string",
+            description: "Why this lookup is useful for the advisor right now."
+          },
+          limit: {
+            type: "number",
+            minimum: 1,
+            maximum: 8,
+            description: "Maximum number of results to return. Prefer 3 to 5."
+          }
+        }
+      }
+    },
+    {
+      type: "function",
+      name: "suggest_follow_up_question",
+      description: "Suggest one high-value question the advisor could ask right now. Do not use for greetings, identity checks, call routing, generic confirmations, or before at least three substantive conversational turns.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "reason", "source", "priority"],
+        properties: {
+          title: { type: "string", minLength: 6, maxLength: 180 },
+          reason: { type: "string", minLength: 8, maxLength: 260 },
+          source: { type: "string", minLength: 4, maxLength: 160 },
+          priority: { type: "string", enum: ["high", "medium", "low"] }
+        }
+      }
+    },
+    {
+      type: "function",
+      name: "surface_relevant_partner",
+      description: "Surface advisor-network partners such as lawyers, doctors, tax advisors, or estate planners only when the live conversation contains a concrete specialist/referral need. Do not use for greetings, generic rapport, or vague context.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["need", "reason", "sourceSnippet"],
+        properties: {
+          need: {
+            type: "string",
+            minLength: 6,
+            maxLength: 220,
+            description: "Focused specialist need from the current conversation, for example estate lawyer, medical screening, or tax advisor."
+          },
+          reason: {
+            type: "string",
+            minLength: 8,
+            maxLength: 260,
+            description: "Why surfacing a partner would help the advisor right now."
+          },
+          sourceSnippet: {
+            type: "string",
+            minLength: 4,
+            maxLength: 320,
+            description: "Short quote or close paraphrase from the live conversation that triggered the partner lookup."
+          },
+          limit: {
+            type: "number",
+            minimum: 1,
+            maximum: 5,
+            description: "Maximum partners to return. Prefer 2 to 3."
+          }
+        }
+      }
+    },
+    {
+      type: "function",
+      name: "capture_useful_memory",
+      description: "Capture useful client information worth saving for future meetings. Only call for durable facts, commitments, concerns, goals, life events, people, emotional cues, or referrals.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["category", "summary", "sourceSnippet", "confidence"],
+        properties: {
+          category: {
+            type: "string",
+            enum: [
+              "Life Event",
+              "Emotional Cue",
+              "Unresolved Concern",
+              "Goal/Objective",
+              "Promise/Commitment",
+              "Relationship Mention",
+              "Referral Opportunity",
+              "Follow-Up Action"
+            ]
+          },
+          summary: { type: "string", minLength: 8, maxLength: 280 },
+          sourceSnippet: { type: "string", minLength: 4, maxLength: 320 },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          proposedGraphMutation: { type: "string", maxLength: 500 }
+        }
+      }
+    }
+  ];
 }

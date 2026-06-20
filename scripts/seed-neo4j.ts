@@ -6,7 +6,8 @@ import {
   client,
   graphNodes,
   meetings,
-  memories
+  memories,
+  partnerProfiles
 } from "../lib/demo-data";
 import type { GraphEdge, GraphNode, MemoryItem } from "../lib/types";
 import { getNeo4jDatabaseConfig, loadLocalEnv } from "./load-local-env";
@@ -180,6 +181,60 @@ async function main() {
       { clientId: client.id, spouse, daughter, referral, evelyn, marcus }
     );
 
+    for (const partner of partnerProfiles) {
+      await executeWrite(
+        driver,
+        `
+        MATCH (a:Advisor {id: $advisorId})
+        MERGE (partner:Specialist {id: $partner.id})
+        SET partner.name = $partner.name,
+            partner.label = $partner.name,
+            partner.partnerType = $partner.partnerType,
+            partner.specialty = $partner.specialty,
+            partner.organization = $partner.organization,
+            partner.note = $partner.note,
+            partner.keywords = $partner.keywords,
+            partner.searchText = $searchText,
+            partner.introStatus = $partner.introStatus,
+            partner.updatedAt = datetime()
+        MERGE (a)-[networkRel:HAS_PARTNER]->(partner)
+        SET networkRel.id = $relationshipId,
+            networkRel.label = 'advisor partner'
+        `,
+        {
+          advisorId: advisor.id,
+          partner,
+          relationshipId: `edge-partner-${partner.id}`,
+          searchText: [
+            partner.name,
+            partner.partnerType,
+            partner.specialty,
+            partner.organization ?? "",
+            partner.note,
+            partner.keywords.join(" ")
+          ].join(" ")
+        }
+      );
+
+      if (partner.partnerType === "estate_planner" || partner.partnerType === "lawyer") {
+        await executeWrite(
+          driver,
+          `
+          MATCH (referral:ReferralOpportunity {id: 'referral-estate'})
+          MATCH (partner:Specialist {id: $partnerId})
+          MERGE (referral)-[matchRel:MATCHES_SPECIALIST]->(partner)
+          SET matchRel.id = $relationshipId,
+              matchRel.label = $relationshipLabel
+          `,
+          {
+            partnerId: partner.id,
+            relationshipId: `edge-estate-match-${partner.id}`,
+            relationshipLabel: partner.partnerType === "lawyer" ? "legal support" : "matches"
+          }
+        );
+      }
+    }
+
     for (const journey of extraJourneys) {
       await seedExtraJourney(driver, journey);
     }
@@ -215,6 +270,7 @@ function demoNodeIds() {
     "realtime-test-will-planning-typed",
     ...actions.map((action) => action.id),
     ...graphNodes.map((node) => node.id),
+    ...partnerProfiles.map((partner) => partner.id),
     ...extraJourneys.flatMap(extraJourneyNodeIds)
   ];
 }

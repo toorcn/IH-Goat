@@ -43,7 +43,7 @@ export default async function ClientPage({
         </PrimaryButton>
       </section>
 
-      <ClientContextPanel context={context} />
+      <ClientContextPanel context={context} mode="profile" />
 
       <InfoTabs
         tabs={[
@@ -57,17 +57,23 @@ export default async function ClientPage({
             id: "network",
             label: "Network",
             icon: <Network className="h-4 w-4" />,
-            content: <RelationshipGraph nodes={context.graph.nodes} edges={context.graph.edges} />
+            content: (
+              <RelationshipGraph
+                nodes={context.graph.nodes}
+                edges={context.graph.edges}
+                source={context.memorySource ?? "demo"}
+              />
+            )
           },
           {
             id: "memory",
             label: "Memory",
             icon: <Sparkles className="h-4 w-4" />,
             content: (
-              <Panel title="Approved and recent memory" eyebrow="What I've saved">
+              <Panel title="Durable Facts" eyebrow="Approved memory">
                 {approvedOrRecentMemories.length === 0 ? (
                   <div className="rounded-[1.2rem] border border-dashed border-line bg-paper p-5 text-sm leading-6 text-muted">
-                    Memories you approve after a meeting show up here.
+                    Advisor-relevant facts saved from meetings show up here.
                   </div>
                 ) : (
                   <div className="grid gap-3 lg:grid-cols-2">
@@ -94,10 +100,10 @@ export default async function ClientPage({
           },
           {
             id: "concerns",
-            label: "Open items",
+            label: "Open Work",
             icon: <CircleAlert className="h-4 w-4" />,
             content: (
-              <Panel title="Open concerns and promises" eyebrow="Still to resolve">
+              <Panel title="Open Work" eyebrow="Concerns, promises, follow-ups">
                 {openMemories.length === 0 ? (
                   <div className="rounded-[1.2rem] border border-dashed border-line bg-paper p-5 text-sm leading-6 text-muted">
                     Nothing is open for {context.client.name} right now.

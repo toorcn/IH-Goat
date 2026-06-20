@@ -8,6 +8,7 @@ import type {
   GraphNode,
   Meeting,
   MemoryItem,
+  PartnerProfile,
   SilentSuggestion,
   TranscriptEvent
 } from "./types";
@@ -216,6 +217,59 @@ export const graphNodes: GraphNode[] = [
     label: "Estate Planning Intro",
     type: "ReferralOpportunity",
     note: "Warm introduction for will update"
+  }
+];
+
+export const partnerProfiles: PartnerProfile[] = [
+  {
+    id: "specialist-evelyn",
+    name: "Evelyn Ng",
+    partnerType: "estate_planner",
+    specialty: "Estate planning and family transition",
+    organization: "Evelyn Ng Advisory",
+    note: "Trusted estate planner for will-update conversations and family transition planning.",
+    keywords: ["estate", "will", "legacy", "family transition", "executor", "beneficiary"],
+    introStatus: "trusted"
+  },
+  {
+    id: "specialist-marcus",
+    name: "Marcus Lee",
+    partnerType: "lawyer",
+    specialty: "Wills, probate, and estate legal work",
+    organization: "Lee & Partners",
+    note: "Lawyer in Sarah's network for will drafting, probate, and estate documentation.",
+    keywords: ["lawyer", "legal", "will", "probate", "estate", "trust", "documentation"],
+    introStatus: "trusted"
+  },
+  {
+    id: "specialist-aisha",
+    name: "Aisha Rahman",
+    partnerType: "lawyer",
+    specialty: "Family business succession",
+    organization: "Rahman Legal",
+    note: "Useful when planning touches family business ownership, shareholder arrangements, or succession.",
+    keywords: ["business", "succession", "shareholder", "family company", "legal", "lawyer"],
+    introStatus: "available"
+  },
+  {
+    id: "specialist-dr-lim",
+    name: "Dr. Lim Wei Han",
+    partnerType: "doctor",
+    specialty: "Executive health screening and medical underwriting context",
+    organization: "Orchard Health Partners",
+    note: "Medical partner for health screening, insurance underwriting context, and client wellness referrals.",
+    keywords: ["doctor", "medical", "health", "screening", "underwriting", "insurance", "diagnosis"],
+    introStatus: "available"
+  },
+  {
+    id: "specialist-priya",
+    name: "Priya Shah",
+    partnerType: "tax_advisor",
+    specialty: "Property, estate, and cross-border tax planning",
+    organization: "Shah Tax Advisory",
+    note: "Tax advisor for property transfers, estate tax exposure, and cross-border family planning.",
+    keywords: ["tax", "property", "cross border", "estate", "transfer", "accountant"],
+    introStatus: "available"
   }
 ];
 
