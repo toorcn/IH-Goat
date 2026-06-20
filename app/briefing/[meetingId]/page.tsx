@@ -83,9 +83,9 @@ export default async function BriefingPage({
           },
           {
             id: "context",
-            label: "Client",
+            label: "Profile",
             icon: <User className="h-4 w-4" />,
-            content: <ClientContextPanel context={context} />
+            content: <ClientContextPanel context={context} mode="profile" />
           },
           {
             id: "timeline",
@@ -97,7 +97,13 @@ export default async function BriefingPage({
             id: "network",
             label: "Network",
             icon: <Network className="h-4 w-4" />,
-            content: <RelationshipGraph nodes={context.graph.nodes} edges={context.graph.edges} />
+            content: (
+              <RelationshipGraph
+                nodes={context.graph.nodes}
+                edges={context.graph.edges}
+                source={context.memorySource ?? "demo"}
+              />
+            )
           }
         ]}
       />

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CheckCircle2, Network, Radio, User } from "lucide-react";
+import { CheckCircle2, Radio, User } from "lucide-react";
 import { ClientContextPanel } from "@/components/context-panel";
 import type { InfoTab } from "@/components/info-tabs";
 import { LiveCompanion } from "@/components/live-companion";
@@ -26,15 +26,18 @@ export default async function LiveMeetingPage({
   const referenceTabs: InfoTab[] = [
     {
       id: "context",
-      label: "Client",
+      label: "Context",
       icon: <User className="h-4 w-4" />,
-      content: <ClientContextPanel context={context} />
-    },
-    {
-      id: "network",
-      label: "Network",
-      icon: <Network className="h-4 w-4" />,
-      content: <RelationshipGraph nodes={context.graph.nodes} edges={context.graph.edges} />
+      content: (
+        <div className="space-y-3">
+          <ClientContextPanel context={context} mode="profile" />
+          <RelationshipGraph
+            nodes={context.graph.nodes}
+            edges={context.graph.edges}
+            source={context.memorySource ?? "demo"}
+          />
+        </div>
+      )
     }
   ];
 
@@ -49,7 +52,7 @@ export default async function LiveMeetingPage({
             <Badge tone="rose">Live with {context.client.name}</Badge>
             <p className="mt-1.5 hidden max-w-xl text-sm leading-6 text-muted sm:block">
               I listen silently, tell advisor and client apart, suggest what to ask next, and capture
-              what matters so you can save it for next time. Nothing is sent to the client.
+              useful memory automatically for next time. Nothing is sent to the client.
             </p>
           </div>
         </div>

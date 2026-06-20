@@ -193,7 +193,11 @@ export default async function DashboardPage() {
         <Timeline context={context} />
       </section>
 
-      <RelationshipGraph nodes={context.graph.nodes} edges={context.graph.edges} />
+      <RelationshipGraph
+        nodes={context.graph.nodes}
+        edges={context.graph.edges}
+        source={context.memorySource ?? "demo"}
+      />
     </AppShell>
   );
 }
