@@ -329,6 +329,20 @@ export function extractMeetingSignals(events: TranscriptEvent[]) {
     });
   }
 
+  if (text.includes("baby") || text.includes("expecting") || text.includes("wife is expecting")) {
+    extracted.push({
+      id: "extract-growing-family",
+      clientId: client.id,
+      category: "Life Event",
+      summary: "Mr. Tan's wife is expecting, making family protection and estate planning more urgent.",
+      sourceSnippet: latestMatchingSnippet(events, ["baby", "expecting", "wife"]),
+      timestamp: now,
+      confidence: 0.91,
+      proposedGraphMutation:
+        "MERGE (c:Client {id: 'client-tan'})-[:HAS_LIFE_EVENT]->(:LifeEvent {title: 'Wife expecting baby'})"
+    });
+  }
+
   if (text.includes("will") || text.includes("estate")) {
     suggestions.push({
       id: "suggest-will",
