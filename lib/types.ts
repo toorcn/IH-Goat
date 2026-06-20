@@ -116,10 +116,15 @@ export type TranscriptEvent = {
 export type ExtractedMemory = {
   id: string;
   clientId: string;
+  relatedClientId?: string;
   meetingId?: string;
+  type?: MemoryCategory;
+  title?: string;
+  description?: string;
   category: MemoryCategory;
   summary: string;
   sourceSnippet: string;
+  evidenceQuote?: string;
   timestamp: string;
   sourceEventIds?: string[];
   confidence: number;

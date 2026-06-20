@@ -959,8 +959,27 @@ export function extractMeetingSignals(
 
   return {
     suggestions: dedupeById(suggestions),
-    extracted: dedupeById(extracted)
+    extracted: dedupeById(extracted).map(enrichProposalShape)
   };
+}
+
+function enrichProposalShape(memory: ExtractedMemory): ExtractedMemory {
+  return {
+    ...memory,
+    type: memory.type ?? memory.category,
+    title: memory.title ?? proposalTitle(memory),
+    description: memory.description ?? memory.summary,
+    relatedClientId: memory.relatedClientId ?? memory.clientId,
+    evidenceQuote: memory.evidenceQuote ?? memory.sourceSnippet
+  };
+}
+
+function proposalTitle(memory: ExtractedMemory) {
+  if (memory.proposedNodes?.[0]?.title) return memory.proposedNodes[0].title;
+  if (memory.relatedPersonName) return `${memory.category}: ${memory.relatedPersonName}`;
+
+  const [firstSentence] = memory.summary.split(".");
+  return firstSentence.length > 80 ? `${firstSentence.slice(0, 77)}...` : firstSentence;
 }
 
 function latestMatchingSnippet(events: TranscriptEvent[], terms: string[]) {
