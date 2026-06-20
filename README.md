@@ -4,6 +4,26 @@ Hackathon MVP for an AI memory operating system for financial advisors.
 
 The demo follows one advisor, Sarah Lim, as she prepares for, runs, reviews, and follows up on a client meeting with Mr. Tan Wee Seng. The product story is simple: the advisor should never walk into a meeting cold, forget important context, miss a referral signal, or save client memory without review.
 
+## Team Members
+
+- **Sim Hong Bing**
+- **Olivia Lim Yun Xuan**
+- **MUTHURAMAN PALANIAPPAN**
+- **Mohtasham Murshid Madani**
+- **Lee Ping Xian**
+
+## Challenge and Approach (Why choosing Track 1)
+
+### The Challenge
+Financial advisors manage high-stakes, long-term relationships with dozens of clients. Retaining crucial contextual details—such as family relationships, life milestones, personal preferences, unresolved client concerns, and follow-up promises—is challenging. Conventional CRMs are passive repositories that require tedious manual updates and active searching, often leading to missed opportunities, forgotten follow-ups, and fragmented client knowledge.
+
+### Our Approach (Why choosing Track 1)
+We chose **Track 1** because it aligns perfectly with our vision of building an intelligent, agent-gated cognitive assistant. Rather than creating a passive CRM or a simple chatbot, our approach focuses on:
+1. **Graph-Shaped Memory (Neo4j):** Storing client relationships and histories in a graph database, mirroring the organic way advisors think about their networks.
+2. **Real-time Multimodal Briefing (OpenAI WebRTC):** Allowing advisors to prepare for meetings through interactive voice and typed briefing sessions.
+3. **Silent Live Companion:** Capturing memory updates and proposing follow-up actions during meetings without disrupting the advisor-client human interaction.
+4. **Advisor-in-the-Loop Control:** Ensuring all automated memory writes and follow-ups are approved by the advisor before execution.
+
 ## What It Proves
 
 - **L1 pre-meeting briefing:** advisor asks grounded voice or typed questions before a client meeting.
@@ -25,7 +45,7 @@ The reliable 5-minute judge path:
 
 Approval buttons do not send client-facing messages. They only mark advisor-reviewed output and, when Neo4j is configured, persist approved records to the memory layer.
 
-## Tech Stack
+## Technologies Used
 
 | Layer | Technology | Why |
 | --- | --- | --- |
