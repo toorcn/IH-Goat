@@ -14,7 +14,7 @@ function getDriver() {
     driver = neo4j.driver(
       process.env.NEO4J_URI as string,
       neo4j.auth.basic(process.env.NEO4J_USERNAME as string, process.env.NEO4J_PASSWORD as string),
-      { connectionTimeout: 1500, maxTransactionRetryTime: 1000 }
+      { connectionTimeout: 8000, maxTransactionRetryTime: 3000 }
     );
   }
   return driver;
@@ -230,9 +230,17 @@ export async function getMemoryLayerDiagnostics(clientId: string) {
       CALL {
         WITH c
         MATCH (c)-[:HAS_MEMORY]->(m:Memory)
-        RETURN count(m) AS memories,
-               count { (m)-[:MATERIALIZES_AS]->() } AS materializedMemories,
-               count { (m)<-[:PRODUCED]-(:Meeting) } AS meetingLinkedMemories
+        RETURN count(DISTINCT m) AS memories
+      }
+      CALL {
+        WITH c
+        MATCH (c)-[:HAS_MEMORY]->(m:Memory)-[:MATERIALIZES_AS]->()
+        RETURN count(DISTINCT m) AS materializedMemories
+      }
+      CALL {
+        WITH c
+        MATCH (c)-[:HAS_MEMORY]->(m:Memory)<-[:PRODUCED]-(:Meeting)
+        RETURN count(DISTINCT m) AS meetingLinkedMemories
       }
       CALL {
         WITH c

@@ -78,9 +78,17 @@ export async function getNeo4jGraphHealth(driver: Driver, clientId: string) {
     CALL {
       WITH c
       MATCH (c)-[:HAS_MEMORY]->(m:Memory)
-      RETURN count(m) AS memories,
-             count { (m)-[:MATERIALIZES_AS]->() } AS materializedMemories,
-             count { (m)<-[:PRODUCED]-(:Meeting) } AS meetingLinkedMemories
+      RETURN count(DISTINCT m) AS memories
+    }
+    CALL {
+      WITH c
+      MATCH (c)-[:HAS_MEMORY]->(m:Memory)-[:MATERIALIZES_AS]->()
+      RETURN count(DISTINCT m) AS materializedMemories
+    }
+    CALL {
+      WITH c
+      MATCH (c)-[:HAS_MEMORY]->(m:Memory)<-[:PRODUCED]-(:Meeting)
+      RETURN count(DISTINCT m) AS meetingLinkedMemories
     }
     CALL {
       WITH c
