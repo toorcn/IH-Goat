@@ -30,7 +30,7 @@ export default async function BriefingPage({
       <div className="grid gap-3 md:grid-cols-3">
         <MetricCard label="Voice transport" value="WebRTC" detail="Realtime session with an ephemeral server token." tone="signal" />
         <MetricCard label="Grounding" value={context.memorySource === "neo4j" ? "Neo4j" : "Demo"} detail="Briefing uses the same client context shown below." tone="cobalt" />
-        <MetricCard label="Next step" value="Companion" detail="Move directly into silent meeting support." tone="amber" />
+        <MetricCard label="Next step" value="Companion" detail="Move directly into silent meeting support." tone="orange" />
       </div>
 
       <VoiceBriefing context={context} />

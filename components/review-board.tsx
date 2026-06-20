@@ -87,10 +87,10 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={action.status === "approved" ? "signal" : "amber"}>{action.status}</Badge>
+                    <Badge tone={action.status === "approved" ? "signal" : "orange"}>{action.status}</Badge>
                     <span className="text-xs font-medium text-muted">Due {action.dueAt}</span>
                   </div>
-                  <h3 className="mt-2 text-sm font-semibold text-ink">{action.title}</h3>
+                  <h3 className="mt-2 font-heading text-sm font-bold text-ink">{action.title}</h3>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -144,7 +144,7 @@ export function ReviewBoard({ context }: { context: ClientContext }) {
                       {Math.round(memory.confidence * 100)}% confidence
                     </span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-ink">{memory.summary}</p>
+                  <p className="mt-2 font-heading text-sm font-bold text-ink">{memory.summary}</p>
                   <p className="mt-1 text-sm leading-6 text-muted">&quot;{memory.sourceSnippet}&quot;</p>
                   <div className="mt-3 flex gap-2">
                     <button

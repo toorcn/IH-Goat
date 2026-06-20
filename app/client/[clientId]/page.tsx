@@ -31,7 +31,7 @@ export default async function ClientPage({
       <div className="grid gap-3 md:grid-cols-3">
         <MetricCard label="Relationship" value={`Since ${context.client.relationshipSince}`} detail={context.client.riskProfile} tone="cobalt" />
         <MetricCard label="Graph" value={`${context.graph.nodes.length} nodes`} detail={`${context.graph.edges.length} known relationships`} tone="signal" />
-        <MetricCard label="Open concerns" value={`${context.memories.filter((memory) => memory.status === "open").length}`} detail="Ready for the next briefing." tone="amber" />
+        <MetricCard label="Open concerns" value={`${context.memories.filter((memory) => memory.status === "open").length}`} detail="Ready for the next briefing." tone="orange" />
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
@@ -58,7 +58,7 @@ export default async function ClientPage({
                 .map((memory) => (
                   <tr key={memory.id}>
                     <td className="border-b border-line px-3 py-3">
-                      <Badge tone="amber">{memory.category}</Badge>
+                      <Badge tone="orange">{memory.category}</Badge>
                     </td>
                     <td className="border-b border-line px-3 py-3 font-semibold text-ink">
                       {memory.title}

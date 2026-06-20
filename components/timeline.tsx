@@ -13,7 +13,7 @@ export function Timeline({ context }: { context: ClientContext }) {
       date: "2026-04-08",
       title: "Last meeting",
       body: "Estate planning discussed, will update unresolved, policy renewal hesitation captured.",
-      tone: "amber" as const
+      tone: "orange" as const
     },
     {
       date: "2026-04-08",
@@ -30,7 +30,7 @@ export function Timeline({ context }: { context: ClientContext }) {
           <li key={`${row.date}-${row.title}`} className="grid grid-cols-[6rem_1fr] gap-3">
             <Badge tone={row.tone}>{row.date}</Badge>
             <div className="border-b border-line pb-3 last:border-b-0">
-              <p className="text-sm font-semibold text-ink">{row.title}</p>
+              <p className="font-heading text-sm font-bold text-ink">{row.title}</p>
               <p className="mt-1 text-sm leading-6 text-muted">{row.body}</p>
             </div>
           </li>

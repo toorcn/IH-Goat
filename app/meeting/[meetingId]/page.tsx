@@ -30,7 +30,7 @@ export default async function MeetingPage({
       <div className="grid gap-3 md:grid-cols-3">
         <MetricCard label="Capture" value="Audio" detail="Browser microphone chunks post to transcription." tone="rose" />
         <MetricCard label="Advisor view" value="Silent" detail="Suggestions appear without client-facing interruption." tone="cobalt" />
-        <MetricCard label="Memory" value="Pending" detail="New facts stay candidates until review." tone="amber" />
+        <MetricCard label="Memory" value="Pending" detail="New facts stay candidates until review." tone="orange" />
       </div>
 
       <MeetingCompanion context={context} />

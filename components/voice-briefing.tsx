@@ -306,7 +306,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
                     ? "bg-panel text-ink"
                     : message.role === "advisor"
                       ? "bg-cobalt/10 text-ink"
-                      : "bg-amber/10 text-ink"
+                      : "bg-orange/10 text-ink"
                 }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -343,7 +343,7 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
         </div>
 
         <aside className="rounded-lg border border-line bg-paper p-3">
-          <p className="text-sm font-semibold text-ink">Suggested follow-ups</p>
+          <p className="font-heading text-sm font-bold text-ink">Suggested follow-ups</p>
           <div className="mt-3 space-y-2">
             {context.suggestedQuestions.map((question) => (
               <button

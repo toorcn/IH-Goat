@@ -8,7 +8,7 @@ export function ClientContextPanel({ context }: { context: ClientContext }) {
   return (
     <Panel title="Client Context" eyebrow={context.client.name}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Badge tone={context.memorySource === "neo4j" ? "signal" : "amber"}>
+        <Badge tone={context.memorySource === "neo4j" ? "signal" : "orange"}>
           {context.memorySource === "neo4j" ? "Neo4j memory" : "Demo memory"}
         </Badge>
         {context.memoryWarning ? (
@@ -32,7 +32,7 @@ export function ClientContextPanel({ context }: { context: ClientContext }) {
           icon={<MessageSquareText className="h-4 w-4" />}
           label="Open Items"
           value={`${openItems.length} active`}
-          tone="amber"
+          tone="orange"
         />
         <IconPill
           icon={<Network className="h-4 w-4" />}
@@ -42,15 +42,15 @@ export function ClientContextPanel({ context }: { context: ClientContext }) {
       </div>
 
       <div className="mt-5 space-y-3">
-        <h3 className="text-sm font-semibold text-ink">High-salience memory</h3>
+        <h3 className="font-heading text-sm font-bold text-ink">High-salience memory</h3>
         {context.memories
           .slice()
           .sort((a, b) => b.salience - a.salience)
           .slice(0, 4)
           .map((memory) => (
-            <div key={memory.id} className="rounded-lg border border-line bg-paper p-3">
+            <div key={memory.id} className="rounded-lg border border-line bg-paper p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={memory.status === "open" ? "amber" : "neutral"}>{memory.category}</Badge>
+                <Badge tone={memory.status === "open" ? "orange" : "neutral"}>{memory.category}</Badge>
                 <span className="text-xs font-medium text-muted">{memory.source}</span>
               </div>
               <p className="mt-2 text-sm font-semibold text-ink">{memory.title}</p>
@@ -59,8 +59,8 @@ export function ClientContextPanel({ context }: { context: ClientContext }) {
           ))}
       </div>
 
-      <div className="mt-5 rounded-lg border border-signal/25 bg-signal/10 p-3">
-        <p className="text-sm font-semibold text-ink">Opening cue</p>
+      <div className="mt-5 rounded-lg border border-orange/25 bg-orange/10 p-3">
+        <p className="font-heading text-sm font-bold text-ink">Opening cue</p>
         <p className="mt-1 text-sm leading-6 text-muted">
           Congratulate Mr. Tan on Jia En&apos;s NUS acceptance before moving into estate
           planning.

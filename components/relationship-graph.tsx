@@ -33,7 +33,7 @@ export function RelationshipGraph({
                   y1={source.y}
                   x2={target.x}
                   y2={target.y}
-                  stroke="oklch(72% 0.035 230)"
+                  stroke="oklch(72% 0.035 70)"
                   strokeWidth="0.35"
                 />
                 <text
@@ -49,18 +49,22 @@ export function RelationshipGraph({
             );
           })}
         </svg>
-        {nodes.map((node) => {
+        {nodes.map((node, index) => {
           const position = positions[node.id] ?? { x: 50, y: 50 };
           return (
             <div
               key={node.id}
-              className="absolute w-36 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-panel p-3 shadow-soft"
-              style={{ left: `${position.x}%`, top: `${position.y}%` }}
+              className="absolute w-36 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-panel p-3 shadow-soft transition-all duration-300 hover:-translate-y-[calc(50%+2px)] hover:shadow-glow"
+              style={{
+                left: `${position.x}%`,
+                top: `${position.y}%`,
+                animationDelay: `${index * 80}ms`
+              }}
             >
-              <Badge tone={node.type === "Client" ? "signal" : node.type === "ReferralOpportunity" ? "amber" : "neutral"}>
+              <Badge tone={node.type === "Client" ? "signal" : node.type === "ReferralOpportunity" ? "orange" : "neutral"}>
                 {formatNodeType(node.type)}
               </Badge>
-              <p className="mt-2 text-sm font-semibold text-ink">{node.label}</p>
+              <p className="mt-2 font-heading text-sm font-bold text-ink">{node.label}</p>
               <p className="mt-1 text-xs leading-5 text-muted">{node.note}</p>
             </div>
           );

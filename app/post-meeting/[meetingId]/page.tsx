@@ -29,7 +29,7 @@ export default async function PostMeetingPage({
 
       <div className="grid gap-3 md:grid-cols-3">
         <MetricCard label="Follow-ups" value="Drafted" detail="Advisor can approve, edit, or ignore next actions." tone="signal" />
-        <MetricCard label="Memory updates" value="Pending" detail="Graph mutations require explicit approval." tone="amber" />
+        <MetricCard label="Memory updates" value="Pending" detail="Graph mutations require explicit approval." tone="orange" />
         <MetricCard label="Evidence" value="Linked" detail="Review stays connected to the client graph." tone="cobalt" />
       </div>
 

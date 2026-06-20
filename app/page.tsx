@@ -37,11 +37,11 @@ export default async function DashboardPage() {
         <div className="rounded-lg border border-line bg-panel p-5 shadow-soft md:p-6">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="signal">demo ready</Badge>
-            <Badge tone={context.memorySource === "neo4j" ? "signal" : "amber"}>
+            <Badge tone={context.memorySource === "neo4j" ? "signal" : "orange"}>
               {context.memorySource === "neo4j" ? "Neo4j memory" : "Demo memory"}
             </Badge>
           </div>
-          <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-tight tracking-normal text-ink md:text-5xl">
+          <h1 className="mt-5 max-w-3xl font-heading text-4xl font-bold leading-tight tracking-normal text-ink md:text-5xl">
             Sarah&apos;s next client meeting is ready to run.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted">
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
 
         <Panel title="Next Meeting" eyebrow="Today" action={<StatusIcon status="ready" />}>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="amber">10:30 AM</Badge>
+            <Badge tone="orange">10:30 AM</Badge>
             <span className="text-sm font-medium text-muted">{context.upcomingMeeting.location}</span>
           </div>
           <h2 className="mt-4 text-2xl font-semibold text-ink">{context.client.name}</h2>
@@ -135,9 +135,9 @@ export default async function DashboardPage() {
             href={`/post-meeting/${context.upcomingMeeting.id}`}
             cta="Review outputs"
             icon={<CheckCircle2 className="h-5 w-5" />}
-            tone="amber"
+            tone="orange"
           >
-            <Badge tone="amber">Human approval</Badge>
+            <Badge tone="orange">Human approval</Badge>
           </FeatureCard>
         </div>
       </section>
@@ -147,7 +147,7 @@ export default async function DashboardPage() {
           <MetricCard label="Step 1" value="Dashboard" detail="Orient to the client and meeting." tone="cobalt" />
           <MetricCard label="Step 2" value="Briefing" detail="Voice prep from memory." tone="signal" />
           <MetricCard label="Step 3" value="Companion" detail="Live capture and suggestions." tone="rose" />
-          <MetricCard label="Step 4" value="Review" detail="Approve actions and graph updates." tone="amber" />
+          <MetricCard label="Step 4" value="Review" detail="Approve actions and graph updates." tone="orange" />
         </div>
         <div className="mt-4 flex items-start gap-3 rounded-lg border border-line bg-paper p-3">
           <GitBranch className="mt-0.5 h-4 w-4 text-cobalt" />

@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  background: oklch(97% 0.006 230);
+  background: #ffffff;
 }
 
 * {
@@ -17,11 +17,7 @@ html {
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at top left, oklch(88% 0.055 176 / 0.42), transparent 34rem),
-    radial-gradient(circle at top right, oklch(88% 0.05 250 / 0.34), transparent 30rem),
-    linear-gradient(180deg, oklch(99% 0.004 230), oklch(94% 0.012 230)),
-    oklch(97% 0.006 230);
+  background: #ffffff;
   color: oklch(21% 0.016 235);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   text-rendering: optimizeLegibility;
@@ -35,7 +31,7 @@ textarea {
 }
 
 ::selection {
-  background: oklch(83% 0.08 176);
+  background: oklch(80% 0.12 50);
   color: oklch(21% 0.016 235);
 }
 
@@ -50,6 +46,57 @@ textarea {
 
 .focus-ring:focus-visible {
   box-shadow:
-    0 0 0 2px oklch(97% 0.006 230),
-    0 0 0 4px oklch(57% 0.14 176 / 0.55);
+    0 0 0 2px #ffffff,
+    0 0 0 4px rgba(249, 115, 22, 0.55);
+}
+
+/* ---------- Animated gradient border for feature cards ---------- */
+.gradient-border {
+  position: relative;
+  overflow: hidden;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    rgba(249, 115, 22, 0.5),
+    oklch(57% 0.14 176 / 0.5),
+    oklch(48% 0.13 250 / 0.5),
+    rgba(249, 115, 22, 0.5)
+  );
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 400ms ease;
+  animation: gradientGlow 3s ease infinite;
+}
+.gradient-border:hover::before {
+  opacity: 1;
+}
+
+
+
+/* ---------- Keyframes ---------- */
+@keyframes gradientGlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+
+
+/* ---------- Respect reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
