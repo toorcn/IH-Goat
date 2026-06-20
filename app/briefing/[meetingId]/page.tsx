@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import { CalendarClock, Network, ScrollText, User } from "lucide-react";
+import { CalendarClock, MessageSquareText, Network, ScrollText, User } from "lucide-react";
 import { ClientContextPanel } from "@/components/context-panel";
 import { InfoTabs } from "@/components/info-tabs";
 import { RelationshipGraph } from "@/components/relationship-graph";
 import { Timeline } from "@/components/timeline";
-import { AppShell, Badge } from "@/components/ui";
+import { AppShell, Badge, SecondaryButton } from "@/components/ui";
 import { VoiceBriefing } from "@/components/voice-briefing";
 import { getClientContextForMeeting } from "@/lib/neo4j-memory";
 
@@ -43,6 +43,9 @@ export default async function BriefingPage({
             </p>
           </div>
         </div>
+        <SecondaryButton href={`/qna/${meetingId}`} icon={<MessageSquareText className="h-4 w-4" />}>
+          Open Q&A-only view
+        </SecondaryButton>
       </section>
 
       <VoiceBriefing context={context} />

@@ -818,6 +818,9 @@ export function VoiceBriefing({ context }: { context: ClientContext }) {
                   {/* Rich visual output — table, graph, cards, timeline rendered inline */}
                   {turn.visual ? (
                     <div className="caption-enter">
+                      <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
+                        Latest answer
+                      </p>
                       <AdaptiveMemoryDisplay response={turn.visual} variant="hero" />
                     </div>
                   ) : null}
