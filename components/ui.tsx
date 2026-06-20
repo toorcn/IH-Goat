@@ -23,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <NavLink href="/">Dashboard</NavLink>
               <NavLink href="/briefing/meeting-2026-06-20-tan">Briefing</NavLink>
               <NavLink href="/meeting/meeting-2026-06-20-tan">Meeting</NavLink>
+              <NavLink href="/l2/meeting-2026-06-20-tan">L2 Writer</NavLink>
               <NavLink href="/client/client-tan">Client</NavLink>
               <NavLink href="/post-meeting/meeting-2026-06-20-tan">Review</NavLink>
             </nav>

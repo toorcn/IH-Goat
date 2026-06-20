@@ -35,15 +35,36 @@ The adaptive memory panel maps each `/api/memory/query` response into stable L1/
 views: brief answers, memory cards, action tables, relationship graph, timeline,
 referral recommendation, evidence snippets, and missing-info next steps.
 
+## L2 standalone memory writer
+
+L2 is a separate page, not an add-on inside L1/L1.5. Open:
+
+```txt
+/l2/meeting-2026-06-20-tan
+```
+
+Use it to turn a meeting into approved relationship memory:
+
+1. Capture or simulate transcript lines.
+2. Extract candidate memories through `POST /api/meetings/[meetingId]/extract`.
+3. Review the evidence, confidence, and proposed graph mutation.
+4. Approve or reject each memory card.
+5. Approved cards call `POST /api/memory/approve`, which writes to Neo4j when configured.
+
+The L2 contract is approve-before-write: extraction can propose memory, but it never
+auto-writes to the graph. If Neo4j credentials are missing, the write log shows a
+demo fallback instead of pretending persistence succeeded.
+
 ## Demo flow
 
 The reliable 5-minute path is:
 
 1. Open the dashboard and start the Mr. Tan briefing.
 2. Use the briefing page to show Realtime readiness and client context.
-3. Open the live companion and press **Simulate meeting**.
-4. End and review; approve one follow-up action and one memory update.
-5. Open the client profile. When Neo4j is configured, approved live-meeting memories appear in the dedicated approved/recent memory section after refresh.
+3. Open the live companion and press **Simulate meeting** for silent prompts.
+4. Open **L2 Writer**, simulate/extract candidate memories, then approve one or all writes.
+5. Open the client profile. When Neo4j is configured, approved L2 memories appear in the dedicated approved/recent memory section after refresh.
+6. Use the review board for final follow-up action approval.
 
 Approval is advisor-gated. The app does not send email, WhatsApp, Telegram, calendar invites, or any other client-facing message from the approval buttons.
 

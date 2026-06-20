@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, Mic, Network, Radio } from "lucide-react";
+import { CalendarDays, CheckCircle2, DatabaseZap, Mic, Network, Radio } from "lucide-react";
 import type { CSSProperties } from "react";
 import {
   AppShell,
@@ -175,15 +175,15 @@ export default async function DashboardPage() {
             <Badge tone="cobalt">{context.graph.nodes.length} graph nodes</Badge>
           </FeatureCard>
           <FeatureCard
-            eyebrow="After the call"
-            title="Review Board"
-            description="Approve suggested follow-ups and memory mutations before they become advisor records."
-            href={`/post-meeting/${context.upcomingMeeting.id}`}
-            cta="Review outputs"
-            icon={<CheckCircle2 className="h-5 w-5" />}
+            eyebrow="Standalone L2"
+            title="Memory Writer"
+            description="Extract candidate memories from the meeting and approve Neo4j writes in a separate page."
+            href={`/l2/${context.upcomingMeeting.id}`}
+            cta="Write memory"
+            icon={<DatabaseZap className="h-5 w-5" />}
             tone="amber"
           >
-            <Badge tone="amber">Human approval</Badge>
+            <Badge tone="amber">Approve before write</Badge>
           </FeatureCard>
         </div>
       </section>
