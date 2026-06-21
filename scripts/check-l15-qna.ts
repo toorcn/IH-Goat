@@ -21,7 +21,7 @@ const workspace = readRequired("components/memory-qna-workspace.tsx");
 const adaptiveDisplay = readRequired("components/adaptive-memory-display.tsx");
 const voiceBriefing = readRequired("components/voice-briefing.tsx");
 const ui = readRequired("components/ui.tsx");
-const dashboard = readRequired("app/page.tsx");
+const dashboard = readRequired("app/dashboard/page.tsx");
 const briefingPage = readRequired("app/briefing/[meetingId]/page.tsx");
 
 assert(qnaPage.includes("getClientContextForMeeting"), "Q&A page must load meeting context");
